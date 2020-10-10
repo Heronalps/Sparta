@@ -39,5 +39,7 @@ def parse_temp(path):
     df.to_csv(csv_path, index=False)
 
 if __name__ == "__main__":
-    path = "./inc-4.lrec.temp.txt"
-    parse_temp(path)
+    # paths = ["./inc-4.lrec.temp.txt", "./Icloud-3.lrec.temp.txt", "lrec.temp.txt", "lrec2.temp.txt", "pi3-02.txt", "pizero-09.txt"]
+    paths = ["./temp_thread2.txt"]
+    for path in paths:
+        parse_temp(path)
