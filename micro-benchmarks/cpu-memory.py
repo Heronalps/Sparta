@@ -12,10 +12,10 @@ def gen3dMatrixMul(m1, m2):
 
 if __name__ == "__main__":
     ts1 = time.time()
-    dim = 1024
+    dim = 128
     lower = 100
     upper = 1000
-    for i in range(1):
+    for i in range(400):
         m1 = gen3dMatrix(dim, lower, upper)
         m2 = gen3dMatrix(dim, lower, upper)
         gen3dMatrixMul(m1, m2)
