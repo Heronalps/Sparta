@@ -1,0 +1,7 @@
+tensorflow
+matplotlib
+keras
+Pillow
+gpuinfo
+pymysql 
+sklearn
