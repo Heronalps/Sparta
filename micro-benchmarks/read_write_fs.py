@@ -1,4 +1,4 @@
-import time
+import time, os
 
 ts = time.time()
 
@@ -15,4 +15,4 @@ with open("./test.txt") as f:
 
 print("Time: {}".format(time.time() - ts))
 
-    
+os.remove("./test.txt")    
