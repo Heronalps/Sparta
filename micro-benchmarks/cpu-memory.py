@@ -11,17 +11,19 @@ def gen3dMatrixMul(m1, m2):
     return np.matmul(m1, m2)
 
 if __name__ == "__main__":
-    sleep_time = 1
+    sleep_time = 3.1
     ts1 = time.time()
-    dim = 128
-    lower = 100
-    upper = 1000
-    for i in range(100):
-        m1 = gen3dMatrix(dim, lower, upper)
-        m2 = gen3dMatrix(dim, lower, upper)
-        gen3dMatrixMul(m1, m2)
-        print ("Sleep {0} seconds".format(sleep_time))
-        time.sleep(sleep_time)
+    dim = 256
+    lower = 1000
+    upper = 10000
+    for i in range(400):
+        for j in range(10):
+            m1 = gen3dMatrix(dim, lower, upper)
+            m2 = gen3dMatrix(dim, lower, upper)
+            gen3dMatrixMul(m1, m2)
+            # print ("Sleep {0} seconds".format(sleep_time))
+            # time.sleep(sleep_time)
+        # sleep_time = sleep_time + 0.1
 
     print("====Time====")
     print(time.time() - ts1)
