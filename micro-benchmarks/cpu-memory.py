@@ -16,13 +16,12 @@ if __name__ == "__main__":
     dim = 256
     lower = 1000
     upper = 10000
-    for i in range(400):
-        for j in range(10):
-            m1 = gen3dMatrix(dim, lower, upper)
-            m2 = gen3dMatrix(dim, lower, upper)
-            gen3dMatrixMul(m1, m2)
-            # print ("Sleep {0} seconds".format(sleep_time))
-            # time.sleep(sleep_time)
+    for i in range(10):
+        m1 = gen3dMatrix(dim, lower, upper)
+        m2 = gen3dMatrix(dim, lower, upper)
+        gen3dMatrixMul(m1, m2)
+        # print ("Sleep {0} seconds".format(sleep_time))
+        # time.sleep(sleep_time)
         # sleep_time = sleep_time + 0.1
 
     print("====Time====")
