@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for i in `seq 1 200`; do
-  sensors
+for i in `seq 1 2000`; do
+  sensors >> 'sensors.txt'
   sleep 1s
 done
