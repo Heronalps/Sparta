@@ -2,8 +2,8 @@ import numpy as np
 import time, subprocess, re
 
 # Generate random 2D matrix
-def gen2dMatrix(dim, lower, upper):
-    matrix = np.random.randint(lower, upper, size=(dim, dim))
+def gen2dMatrix(dim):
+    matrix = np.random.rand(dim, dim)
     return matrix
 
 # 2D matrix multiplication
@@ -25,11 +25,9 @@ if __name__ == "__main__":
     sleep_time = 0.001
     ts1 = time.time()
     dim = 64
-    lower = 100
-    upper = 1000
-    for i in range(100):
-        m1 = gen2dMatrix(dim, lower, upper)
-        m2 = gen2dMatrix(dim, lower, upper)
+    for _ in range(100):
+        m1 = gen2dMatrix(dim)
+        m2 = gen2dMatrix(dim)
         gen2dMatrixMul(m1, m2, sleep_time)
         
         # output = subprocess.check_output("sensors")
