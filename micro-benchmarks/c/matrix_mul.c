@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#define N 256
+#define N 128
 
 int nsleep(long milliseconds) {
     struct timespec req, rem;
@@ -20,10 +20,16 @@ int nsleep(long milliseconds) {
 
 void multiply(double mat1[][N], double mat2[][N], double res[][N]) {
     int i, j, k;
-    int ret = nsleep(2500);
+    struct timespec req, rem;
+    req.tv_sec = 0;
+    req.tv_nsec = 0;
+    // int ret = nsleep(10);
     for (i = 0; i < N; i++) {
+	// int ret = nsleep(0.00001);
+	nanosleep(&req, &rem);
         for (j = 0; j < N; j++) {
             res[i][j] = 0;
+	    // int ret = nsleep(1);
             for (k = 0; k < N; k++) {
                 res[i][j] += mat1[i][k] * mat2[k][j];
             }
@@ -50,8 +56,8 @@ int main() {
     }
     
     clock_t c0 = clock();
-    for (int i = 0; i < 12; i++) {
-        multiply(mat1, mat2, res);
+    for (int i = 0; ; i++) {
+	multiply(mat1, mat2, res);
     }
     clock_t c1 = clock();
     double runtime_diff_ms = (c1 - c0) * 1000. / CLOCKS_PER_SEC;

@@ -1,4 +1,4 @@
-// gcc -fopenmp -o go go.c
+// gcc -fopenmp -o go multicore.c
 // ./go
 
 #include <stdio.h>
@@ -13,9 +13,9 @@ int main(int argc, char **argv)
     nloops = 0;
 
 #pragma omp for
-    for (i=0; i<1000; ++i)
+    for (i=0; i < 1000; ++i)
       {
-        ++nloops;
+        while(1);
       }
 
     thread_id = omp_get_thread_num();
