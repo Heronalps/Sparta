@@ -25,8 +25,8 @@ void multiply(double mat1[][N], double mat2[][N], double res[][N]) {
     req.tv_nsec = 0;
     // int ret = nsleep(10);
     for (i = 0; i < N; i++) {
-	// int ret = nsleep(0.00001);
-	nanosleep(&req, &rem);
+	    // int ret = nsleep(0.00001);
+	    nanosleep(&req, &rem);
         for (j = 0; j < N; j++) {
             res[i][j] = 0;
 	    // int ret = nsleep(1);
@@ -57,7 +57,7 @@ int main() {
     
     clock_t c0 = clock();
     for (int i = 0; ; i++) {
-	multiply(mat1, mat2, res);
+	    multiply(mat1, mat2, res);
     }
     clock_t c1 = clock();
     double runtime_diff_ms = (c1 - c0) * 1000. / CLOCKS_PER_SEC;
