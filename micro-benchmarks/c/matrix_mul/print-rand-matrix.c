@@ -5,16 +5,18 @@
 #include <sys/time.h>
 
 char *Usage = "print-rand-matrix -r rows -c cols\n";
-#define ARGS "r:c:"
+#define ARGS "r:c:h:"
 
 int Rows;
 int Cols;
+int Heights;
 
 int main(int argc, char **argv)
 {
 	int c;
 	int i;
 	int j;
+	int k;
 	double r;
 	struct timeval tm;
 	unsigned long seed;
@@ -26,6 +28,9 @@ int main(int argc, char **argv)
 				break;
 			case 'c':
 				Cols = atoi(optarg);
+				break;
+			case 'h':
+				Heights = atoi(optarg);
 				break;
 			default:
 				fprintf(stderr,"unrecognized command %c\n",
@@ -46,17 +51,26 @@ int main(int argc, char **argv)
 		fprintf(stderr,"usage: %s",Usage);
 		exit(1);
 	}
+	
+	if(Heights <= 0) {
+		fprintf(stderr,"must enter columns\n");
+		fprintf(stderr,"usage: %s",Usage);
+		exit(1);
+	}
 
 	gettimeofday(&tm,NULL);
 	seed = tm.tv_sec + tm.tv_usec;
 	srand48(seed);
 
-	printf("%d %d\n",Rows,Cols);
+	printf("%d %d %d\n",Rows,Cols,Heights);
 	for(i=0; i < Rows; i++) {
 		printf("# Row %d\n",i);
 		for(j=0; j < Cols; j++) {
-			r = drand48();
-			printf("%f\n",r);
+			printf("# Col %d\n", i);
+			for (k=0; k < Heights; k++) {
+				r = drand48();
+				printf("%f\n",r);
+			}
 		}
 	}
 

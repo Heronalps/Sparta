@@ -65,6 +65,7 @@ int MultiplyArray2D(Array2D *a, Array2D *b, Array2D *c)
 				// nsleep(10);
 				acc += (a->data[i*(a->xdim)+k] *
 					b->data[k*(b->xdim)+j]);
+				// printf("acc : %f \n", acc);
 			}
 			data[i*new_c+j] = acc;
 		}
