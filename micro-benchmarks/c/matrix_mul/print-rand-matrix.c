@@ -5,7 +5,7 @@
 #include <sys/time.h>
 
 char *Usage = "print-rand-matrix -r rows -c cols\n";
-#define ARGS "r:c:h:"
+#define ARGS "r:c:"
 
 int Rows;
 int Cols;
@@ -52,25 +52,16 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	
-	if(Heights <= 0) {
-		fprintf(stderr,"must enter columns\n");
-		fprintf(stderr,"usage: %s",Usage);
-		exit(1);
-	}
-
 	gettimeofday(&tm,NULL);
 	seed = tm.tv_sec + tm.tv_usec;
 	srand48(seed);
 
-	printf("%d %d %d\n",Rows,Cols,Heights);
+	printf("%d %d\n",Rows,Cols);
 	for(i=0; i < Rows; i++) {
 		printf("# Row %d\n",i);
 		for(j=0; j < Cols; j++) {
-			printf("# Col %d\n", i);
-			for (k=0; k < Heights; k++) {
-				r = drand48();
-				printf("%f\n",r);
-			}
+			r = drand48();
+			printf("%f\n",r);
 		}
 	}
 

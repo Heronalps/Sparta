@@ -47,6 +47,6 @@ clean:
 	rm -rf *.dSYM *.txt
 
 run:
-	./print-rand-matrix -r 1024 -c 1024 -h 1024 > m1.txt
-	./print-rand-matrix -r 1024 -c 1024 -h 1024 > m2.txt
-	# ./mm-solution-nothread -a m1.txt -b m2.txt
+	./print-rand-matrix -r 512 -c 512 > m1.txt
+	./print-rand-matrix -r 512 -c 512 > m2.txt
+	./mm-solution-nothread -a m1.txt -b m2.txt
