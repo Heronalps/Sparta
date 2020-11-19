@@ -159,8 +159,8 @@ int main(int argc, char *argv[])
 		}
 	}
 	end = CTimer();
-	printf("c:\n");
-	PrintMatrix(C);
+	// printf("c:\n");
+	// PrintMatrix(C);
 
 	FreeArray2D(a);
 	FreeArray2D(b);

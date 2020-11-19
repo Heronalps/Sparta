@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
+#include <time.h>
 
 #include "array.h"
 
@@ -10,6 +11,20 @@
 
 #define EL(a,i,j,r) ((a)[(i)*(r)+(j)])
 
+int nsleep(long milliseconds) {
+    struct timespec req, rem;
+
+    if (milliseconds > 999) {
+        req.tv_sec = (int) (milliseconds / 1000);
+        req.tv_nsec = (milliseconds - ((long) req.tv_sec * 1000)) * 1000000;
+    }
+    else {
+        req.tv_sec = 0;
+        req.tv_nsec = milliseconds * 1000000;
+    }
+
+    return nanosleep(&req, &rem);
+}
 
 int MultiplyArray2D(Array2D *a, Array2D *b, Array2D *c)
 {
@@ -20,7 +35,6 @@ int MultiplyArray2D(Array2D *a, Array2D *b, Array2D *c)
 	int new_r;
 	int new_c;
 	double *data;
-
 
 	if(a->xdim != b->ydim)
 	{
@@ -41,11 +55,14 @@ int MultiplyArray2D(Array2D *a, Array2D *b, Array2D *c)
 	data = c->data;
 	for(i=0; i < new_r; i++)
 	{
+		nsleep(10);		
 		for(j=0; j < new_c; j++)
 		{
 			acc = 0.0;
+			// nsleep(10);
 			for(k=0; k < a->xdim; k++)
 			{
+				// nsleep(10);
 				acc += (a->data[i*(a->xdim)+k] *
 					b->data[k*(b->xdim)+j]);
 			}

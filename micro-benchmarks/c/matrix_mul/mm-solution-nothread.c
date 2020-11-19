@@ -84,8 +84,8 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 		
-	printf("c:\n");
-	PrintMatrix(C);
+	// printf("c:\n");
+	// PrintMatrix(C);
 
 	FreeArray2D(a);
 	FreeArray2D(b);

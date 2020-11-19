@@ -44,5 +44,9 @@ matrix-multiply-thread.o: matrix-multiply-thread.c matrix-multiply-thread.h arra
 
 clean:
 	rm *.o print-rand-matrix read-matrix matrix-multiply-test matrix-multiply-thread-test mm-solution mm-solution-nothread mm-solution-square mmult 
-	rm -rf *.dSYM
+	rm -rf *.dSYM *.txt
 
+run:
+	./print-rand-matrix -r 1024 -c 1024 > m1.txt
+	./print-rand-matrix -r 1024 -c 1024 > m2.txt
+	./mm-solution-nothread -a m1.txt -b m2.txt

@@ -7,5 +7,7 @@
 *.JPG
 *.h5
 test.txt
+m1.txt
+m2.txt
 temps*
 *.out
