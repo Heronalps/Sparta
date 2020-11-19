@@ -60,6 +60,21 @@ void m_print(const matrix_t *t) {
     printf("\n");
 }
 
+int nsleep(long milliseconds) {
+    struct timespec req, rem;
+
+    if (milliseconds > 999) {
+        req.tv_sec = (int) (milliseconds / 1000);
+        req.tv_nsec = (milliseconds - ((long) req.tv_sec * 1000)) * 1000000;
+    }
+    else {
+        req.tv_sec = 0;
+        req.tv_nsec = milliseconds * 1000000;
+    }
+
+    return nanosleep(&req, &rem);
+}
+
 void m_multiply(matrix_t *out, const matrix_t *a, const matrix_t *b) {
     assert(m_columns(b) == m_rows(a));
     assert(m_columns(out) == m_columns(a));
@@ -67,9 +82,12 @@ void m_multiply(matrix_t *out, const matrix_t *a, const matrix_t *b) {
     // Index from 0, not from 1
     // don't do `(col-1) + (row-1)` strange things
     for (size_t col = 0; col < m_columns(out); ++col) {
+        nsleep(10);
         for (size_t row = 0; row < m_rows(out); ++row) {
+            // nsleep(10);
             float sum = 0;
             for (size_t i = 0; i < m_rows(a); ++i) {
+                // nsleep(10);
                 sum += *m_get(a, col, i) * *m_get(b, i, row);
             }
             *m_get(out, col, row) = sum;
