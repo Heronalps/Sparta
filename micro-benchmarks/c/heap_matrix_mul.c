@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <time.h>
+#define N 2048
 
 struct matrix_s {
     char matrixName[50];
@@ -80,13 +81,13 @@ int main()
 {
     matrix_t our_matrix[100];
 
-    m_init_seq(&our_matrix[0], 1024, 1024);
-    m_init_seq(&our_matrix[1], 1024, 1024);
+    m_init_seq(&our_matrix[0], N, N);
+    m_init_seq(&our_matrix[1], N, N);
 
     // m_print(&our_matrix[0]);
     // m_print(&our_matrix[1]);
 
-    m_init(&our_matrix[2], 1024, 1024);
+    m_init(&our_matrix[2], N, N);
     clock_t c0 = clock();
     m_multiply(&our_matrix[2], &our_matrix[0], &our_matrix[1]);
     clock_t c1 = clock();
