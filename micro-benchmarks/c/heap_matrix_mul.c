@@ -2,7 +2,8 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <time.h>
-#define N 2048
+#define N 4000
+#define M 1 
 
 struct matrix_s {
     char matrixName[50];
@@ -31,8 +32,8 @@ size_t m_rows(const matrix_t *t) {
 // matrix_get 
 // (x,y) = (col,row) always in that order
 float *m_get(const matrix_t *t, size_t x, size_t y) {
-    assert(x < m_columns(t));
-    assert(y < m_rows(t));
+    // assert(x < m_columns(t));
+    // assert(y < m_rows(t));
     // __UNCONST
     // see for example `char *strstr(const char *haystack, ...` 
     // it takes `const char*` but returns `char*` nonetheless.
@@ -76,21 +77,21 @@ int nsleep(long milliseconds) {
 }
 
 void m_multiply(matrix_t *out, const matrix_t *a, const matrix_t *b) {
-    assert(m_columns(b) == m_rows(a));
-    assert(m_columns(out) == m_columns(a));
-    assert(m_rows(out) == m_rows(b));
+    // assert(m_columns(b) == m_rows(a));
+    // assert(m_columns(out) == m_columns(a));
+    // assert(m_rows(out) == m_rows(b));
     // Index from 0, not from 1
     // don't do `(col-1) + (row-1)` strange things
     for (size_t col = 0; col < m_columns(out); ++col) {
-        nsleep(10);
+        // nsleep(M);
         for (size_t row = 0; row < m_rows(out); ++row) {
-            // nsleep(10);
+            // nsleep(M);
             float sum = 0;
             for (size_t i = 0; i < m_rows(a); ++i) {
-                // nsleep(10);
-                sum += *m_get(a, col, i) * *m_get(b, i, row);
+                // nsleep(M);
+                *m_get(out, col, row) += *m_get(a, col, i) * *m_get(b, i, row);
             }
-            *m_get(out, col, row) = sum;
+            // *m_get(out, col, row) = sum;
         }
     }
 }

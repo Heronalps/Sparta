@@ -12,8 +12,8 @@
 #define ARGS "a:b:"
 char *Usage = "mm-solution-nothread -a a-matrix-file -b b-matrix-file\n";
 
-char Afile[4096];
-char Bfile[4096];
+char Afile[8192];
+char Bfile[8192];
 
 
 int main(int argc, char *argv[])
@@ -75,7 +75,9 @@ int main(int argc, char *argv[])
 	}
 
 	start = CTimer();
-	err = MultiplyArray2D(a,b,C);
+	for (int i = 0; i < 1; i++) {
+		err = MultiplyArray2D(a,b,C);
+	}
 	end = CTimer();
 
 	if(err < 0)

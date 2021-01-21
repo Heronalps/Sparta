@@ -13,7 +13,7 @@ def gen3dMatrixMul(m1, m2):
 if __name__ == "__main__":
     sleep_time = 3.1
     ts1 = time.time()
-    dim = 256
+    dim = 2560
     for _ in range(10):
         m1 = gen3dMatrix(dim)
         m2 = gen3dMatrix(dim)
