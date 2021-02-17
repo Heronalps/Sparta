@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#define N 128
+#define N 256
 
 int nsleep(long milliseconds) {
     struct timespec req, rem;

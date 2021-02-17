@@ -2,6 +2,8 @@
 **/.ipynb_checkpoints
 **/.vscode/**
 /data/**
+**/image_buffer/**
+**/matrix_mul/**
 *.zip
 *.PNG
 *.JPG
@@ -11,3 +13,6 @@ m1.txt
 m2.txt
 temps*
 *.out
+*.o
+makefile
+

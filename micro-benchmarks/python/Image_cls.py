@@ -6,7 +6,7 @@ from zipfile import ZipFile
 
 
 class_list = ["Birds", "Empty", "Fox", "Humans", "Rodents"]
-MODEL_DIR = './checkpoints/resnet50_model.h5'
+MODEL_DIR = '../checkpoints/resnet50_model.h5'
 PROBE_IMG = os.getcwd() + '/data/IMG_0198.PNG'
 TARGET_IMG = '/IMG_0198.JPG'
 TEMP_DIR = os.getcwd() + "/image_buffer"
@@ -111,11 +111,11 @@ def handler(event, context):
             num_image += 1
         
     start = time.time()
-
+    run_sequential(image_list)
     # initialize Scheduler
-    scheduler = Scheduler(int(NUM_THREAD))
+    # scheduler = Scheduler(int(NUM_THREAD))
     # start multiprocessing
-    scheduler.start(image_list)
+    # scheduler.start(image_list)
         
     end = time.time()
 

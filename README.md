@@ -1,4 +1,4 @@
-# Spartan
+# Sparta
 
 ## Complete
 - Write a parser for temp time series
