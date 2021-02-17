@@ -1,6 +1,7 @@
 /venv/**
 **/.ipynb_checkpoints
 **/.vscode/**
+/temp_data/**
 /data/**
 **/image_buffer/**
 **/matrix_mul/**

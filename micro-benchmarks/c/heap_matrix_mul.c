@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <time.h>
-#define N 4000
+#define N 6000
 #define M 1 
 
 struct matrix_s {
@@ -84,11 +84,14 @@ void m_multiply(matrix_t *out, const matrix_t *a, const matrix_t *b) {
     // don't do `(col-1) + (row-1)` strange things
     for (size_t col = 0; col < m_columns(out); ++col) {
         // nsleep(M);
+	// printf("col : %d \n", col);
         for (size_t row = 0; row < m_rows(out); ++row) {
-            // nsleep(M);
+           //  nsleep(M);
+	   // printf("row : %d \n", row);
             float sum = 0;
             for (size_t i = 0; i < m_rows(a); ++i) {
                 // nsleep(M);
+		// printf("i : %d \n", i);
                 *m_get(out, col, row) += *m_get(a, col, i) * *m_get(b, i, row);
             }
             // *m_get(out, col, row) = sum;
