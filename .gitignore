@@ -15,4 +15,5 @@ temps*
 *.out
 *.o
 makefile
+*.csv
 
