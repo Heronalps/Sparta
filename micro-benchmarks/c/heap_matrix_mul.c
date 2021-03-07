@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <time.h>
-#define N 6000
+#define N 20
 #define M 1 
 
 struct matrix_s {
@@ -45,7 +45,7 @@ void m_init_seq(matrix_t *t, size_t columns, size_t rows) {
     m_init(t, columns, rows);
     for (size_t i = 0; i < t->columns; ++i) {
         for (size_t j = 0; j < t->rows; ++j) {
-            *m_get(t, i, j) = i + 100 * j;
+            *m_get(t, i, j) = i + 100 * j + (float) rand() / RAND_MAX;
         }
     }
 }
@@ -99,19 +99,65 @@ void m_multiply(matrix_t *out, const matrix_t *a, const matrix_t *b) {
     }
 }
 
+int readmatrix(size_t rows, size_t cols, matrix_t* t, const char* filename)
+{
+    FILE *pf;
+    pf = fopen (filename, "r");
+    if (pf == NULL)
+        return 0;
+
+    for(size_t i = 0; i < rows; ++i)
+    {
+        for(size_t j = 0; j < cols; ++j) {
+            fscanf(pf, "%f", m_get(t, i, j));
+        }        
+    }
+    fclose (pf); 
+    return 1; 
+}
+
+void savematrix(size_t rows, size_t cols, matrix_t* t, const char* filename) { 
+    int i, j;
+    FILE *f1;
+    f1 = fopen(filename, "w");
+    if (f1 == NULL) {
+        printf("file could not be opened");
+        abort();
+    }
+    
+    for (i = 0; i < rows; i++) {
+        for (j = 0; j < cols; j++) {
+            fprintf(f1,"%5.2f ", *m_get(t, i, j));
+        }
+        fprintf(f1,"\n");
+    }
+    fclose(f1);
+}
+
 int main()
 {
-    matrix_t our_matrix[100];
+    srand((unsigned int) time(NULL));
+    matrix_t our_matrix[5];
 
     m_init_seq(&our_matrix[0], N, N);
     m_init_seq(&our_matrix[1], N, N);
 
+    // I/O heavy tasks: Save two matrices to file and load into memory
+    savematrix(N, N, &our_matrix[0], "mat1.txt");
+    savematrix(N, N, &our_matrix[1], "mat2.txt");
+
+    m_init(&our_matrix[2], N, N);
+    m_init(&our_matrix[3], N, N);
+
+    readmatrix(N, N, &our_matrix[2], "mat1.txt");
+    readmatrix(N, N, &our_matrix[3], "mat2.txt");
+
     // m_print(&our_matrix[0]);
     // m_print(&our_matrix[1]);
 
-    m_init(&our_matrix[2], N, N);
+    m_init(&our_matrix[4], N, N);
     clock_t c0 = clock();
-    m_multiply(&our_matrix[2], &our_matrix[0], &our_matrix[1]);
+    m_multiply(&our_matrix[4], &our_matrix[2], &our_matrix[3]);
     clock_t c1 = clock();
     double runtime_diff_ms = (c1 - c0) * 1.0 / CLOCKS_PER_SEC;
     printf ("Time : %f \n", runtime_diff_ms);

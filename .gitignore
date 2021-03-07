@@ -12,6 +12,8 @@
 test.txt
 m1.txt
 m2.txt
+mat1.txt
+mat2.txt
 temps*
 *.out
 *.o
