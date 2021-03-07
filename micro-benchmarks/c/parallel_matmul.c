@@ -2,7 +2,10 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <time.h>
-#define N 1000
+#include <sys/time.h>
+#include <pthread.h>
+#include <omp.h>
+#define N 4000
 #define M 1 
 
 struct matrix_s {
@@ -13,6 +16,8 @@ struct matrix_s {
 };
 
 typedef struct matrix_s matrix_t;
+
+struct timeval tval_before, tval_after, tval_result;
 
 void m_init(matrix_t *t, size_t columns, size_t rows) {
     t->rows = rows;
@@ -43,7 +48,7 @@ float *m_get(const matrix_t *t, size_t x, size_t y) {
 // fill matrix with a fancy patterns just so it's semi-unique
 void m_init_seq(matrix_t *t, size_t columns, size_t rows) {
     m_init(t, columns, rows);
-    // #pragma omp parallel for
+    #pragma omp parallel for
     for (size_t i = 0; i < t->columns; ++i) {
         for (size_t j = 0; j < t->rows; ++j) {
             *m_get(t, i, j) = i + 100 * j;
@@ -114,11 +119,14 @@ int main()
     // m_print(&our_matrix[1]);
 
     m_init(&our_matrix[2], N, N);
-    clock_t c0 = clock();
+    
+    gettimeofday(&tval_before, NULL);
     m_multiply(&our_matrix[2], &our_matrix[0], &our_matrix[1]);
-    clock_t c1 = clock();
-    double runtime_diff_ms = (c1 - c0) * 1.0 / CLOCKS_PER_SEC;
-    printf ("Time : %f \n", runtime_diff_ms);
+    gettimeofday(&tval_after, NULL);
+    
+    timersub(&tval_after, &tval_before, &tval_result);
+    
+    printf ("Time : %ld.%06ld\n", (long int) tval_result.tv_sec, (long int) tval_result.tv_usec);
     // m_print(&our_matrix[2]);
 
     return 0;

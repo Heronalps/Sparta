@@ -2,8 +2,9 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <time.h>
-#define N 6000
-#define M 1 
+#include <sys/time.h>
+#define N 1000
+#define M 21
 
 struct matrix_s {
     char matrixName[50];
@@ -11,6 +12,8 @@ struct matrix_s {
     size_t rows;
     float* data;
 };
+
+struct timeval tval_before, tval_after, tval_result;
 
 typedef struct matrix_s matrix_t;
 
@@ -110,11 +113,18 @@ int main()
     // m_print(&our_matrix[1]);
 
     m_init(&our_matrix[2], N, N);
-    clock_t c0 = clock();
+    // clock_t c0 = clock();
+    // time_t t0 = time(0);
+    gettimeofday(&tval_before, NULL);
     m_multiply(&our_matrix[2], &our_matrix[0], &our_matrix[1]);
-    clock_t c1 = clock();
-    double runtime_diff_ms = (c1 - c0) * 1.0 / CLOCKS_PER_SEC;
-    printf ("Time : %f \n", runtime_diff_ms);
+    gettimeofday(&tval_after, NULL);
+    timersub(&tval_after, &tval_before, &tval_result);
+    printf("Time: %ld.%06ld\n", (long int) tval_result.tv_sec, (long int) tval_result.tv_usec);
+    // time_t t1 = time(0);
+    // double runtime_diff_ms = difftime(t1, t0);
+    // clock_t c1 = clock();
+    // double runtime_diff_ms = (long double) (c1 - c0) * 1.0 / CLOCKS_PER_SEC;
+    // printf ("Time : %f \n", runtime_diff_ms);
     // m_print(&our_matrix[2]);
 
     return 0;
