@@ -141,7 +141,7 @@ int main()
 {
     srand((unsigned int) time(NULL));
     matrix_t our_matrix[5];
-
+    gettimeofday(&tval_before, NULL);
     m_init_seq(&our_matrix[0], N, N);
     m_init_seq(&our_matrix[1], N, N);
 
@@ -161,7 +161,7 @@ int main()
     m_init(&our_matrix[2], N, N);
     // clock_t c0 = clock();
     // time_t t0 = time(0);
-    gettimeofday(&tval_before, NULL);
+    // gettimeofday(&tval_before, NULL);
     m_multiply(&our_matrix[2], &our_matrix[0], &our_matrix[1]);
     gettimeofday(&tval_after, NULL);
     timersub(&tval_after, &tval_before, &tval_result);

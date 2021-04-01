@@ -5,7 +5,7 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include <omp.h>
-#define N 4000
+#define N 7000
 #define M 1 
 
 struct matrix_s {
@@ -51,7 +51,7 @@ void m_init_seq(matrix_t *t, size_t columns, size_t rows) {
     #pragma omp parallel for
     for (size_t i = 0; i < t->columns; ++i) {
         for (size_t j = 0; j < t->rows; ++j) {
-            *m_get(t, i, j) = i + 100 * j;
+            *m_get(t, i, j) = i + 100 * j + (float) rand() / RAND_MAX;
         }
     }
 }
@@ -92,12 +92,12 @@ void m_multiply(matrix_t *out, const matrix_t *a, const matrix_t *b) {
     for (size_t col = 0; col < m_columns(out); ++col) {
         // nsleep(M);
 	// printf("col : %d \n", col);
-        // #pragma omp parallel for
+        #pragma omp parallel for
         for (size_t row = 0; row < m_rows(out); ++row) {
            //  nsleep(M);
 	   // printf("row : %d \n", row);
             float sum = 0;
-            // #pragma omp parallel for
+            #pragma omp parallel for
             for (size_t i = 0; i < m_rows(a); ++i) {
                 // nsleep(M);
 		// printf("i : %d \n", i);
@@ -114,9 +114,10 @@ int readmatrix(size_t rows, size_t cols, matrix_t* t, const char* filename)
     pf = fopen (filename, "r");
     if (pf == NULL)
         return 0;
-
+    #pragma omp parallel for
     for(size_t i = 0; i < rows; ++i)
     {
+	#pragma omp parallel for
         for(size_t j = 0; j < cols; ++j) {
             fscanf(pf, "%f", m_get(t, i, j));
         }        
@@ -133,8 +134,9 @@ void savematrix(size_t rows, size_t cols, matrix_t* t, const char* filename) {
         printf("file could not be opened");
         abort();
     }
-    
+    #pragma omp parallel for
     for (i = 0; i < rows; i++) {
+	#pragma omp parallel for
         for (j = 0; j < cols; j++) {
             fprintf(f1,"%5.2f ", *m_get(t, i, j));
         }
@@ -147,7 +149,9 @@ int main()
 {
     srand((unsigned int) time(NULL));
     matrix_t our_matrix[5];
-
+    
+    gettimeofday(&tval_before, NULL);
+    
     m_init_seq(&our_matrix[0], N, N);
     m_init_seq(&our_matrix[1], N, N);
 
@@ -166,7 +170,7 @@ int main()
 
     m_init(&our_matrix[2], N, N);
     
-    gettimeofday(&tval_before, NULL);
+    // gettimeofday(&tval_before, NULL);
     m_multiply(&our_matrix[2], &our_matrix[0], &our_matrix[1]);
     gettimeofday(&tval_after, NULL);
     

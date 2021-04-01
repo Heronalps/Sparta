@@ -1,6 +1,7 @@
 import numpy as np
 from tensorflow import keras
 from tensorflow.keras import layers
+import time
 
 """
 ## Prepare the data
@@ -51,8 +52,10 @@ model.summary()
 ## Train the model
 """
 
-batch_size = 128
-epochs = 15
+batch_size = 64
+epochs = 2
+
+ts_before = time.time()
 
 model.compile(loss="categorical_crossentropy", optimizer="adam", metrics=["accuracy"])
 
@@ -65,3 +68,4 @@ model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, validation_spl
 score = model.evaluate(x_test, y_test, verbose=0)
 print("Test loss:", score[0])
 print("Test accuracy:", score[1])
+print("Time : {}".format(time.time() - ts_before))
