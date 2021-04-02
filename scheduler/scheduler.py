@@ -13,10 +13,9 @@ class Scheduler:
 
     # Execute the program based on the suffix
     def _execute_(self):
-
         # Delay the execution for 1 second to make sure the starting temp is recorded    
         time.sleep(1)
-
+        
         # capture the suffix of the program
         suffix = ''
         path = './'
@@ -37,9 +36,13 @@ class Scheduler:
         # print("path : {}".format(path))
         # print("filename : {}".format(filename))
         
+        # self._log_temp_
+        print ("exec starting")
         proc = subprocess.Popen([self.exec[suffix], path + filename], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate()
         print (stdout.decode("utf-8"))
+        print ("exec ending")
+
 
     # Adjust CPU performance given a frequency
     def _dvfs_(self, freq):
@@ -47,11 +50,14 @@ class Scheduler:
         stdout, stderr = proc.communicate()
         print (stdout.decode("utf-8"))
 
+
     # Log temperature during execution to optimize the existing model
     def _log_temp_(self, log_path=None):
+        print ("log_temp starting")
         proc = subprocess.Popen(['bash', 'record_temp.sh', log_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate()
         print (stdout.decode("utf-8"))
+        print ("log_temp ending")
 
 
     # Regress on logged data and return a recommanded frequency based on the regression
@@ -69,11 +75,13 @@ class Scheduler:
         proc_exec = Process(target=self._execute_)
         proc_exec.start()
 
-        proc_log = Process(target=self._log_temp_, args=("/path", ))
+        proc_log = Process(target=self._log_temp_, args=("path", ))
         proc_log.start()
 
         proc_exec.join()
-        proc_exec.join()
+        proc_log.join()
+
+
 
 s = Scheduler("main.py", 75)
 s.run()

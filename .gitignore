@@ -20,4 +20,4 @@ temps*
 *.o
 makefile
 *.csv
-
+*.swp
