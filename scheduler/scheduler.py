@@ -1,5 +1,7 @@
-import subprocess, re, time
+import re, time
+from subprocess import Popen, PIPE
 from multiprocessing import Process
+
 
 class Scheduler:
     def __init__(self, path=None, temp=None):
@@ -38,7 +40,7 @@ class Scheduler:
         
         # self._log_temp_
         print ("exec starting")
-        proc = subprocess.Popen([self.exec[suffix], path + filename], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc = Popen([self.exec[suffix], path + filename], stdout=PIPE, stderr=PIPE)
         stdout, stderr = proc.communicate()
         print (stdout.decode("utf-8"))
         print ("exec ending")
@@ -46,7 +48,7 @@ class Scheduler:
 
     # Adjust CPU performance given a frequency
     def _dvfs_(self, freq):
-        proc = subprocess.Popen(['./cpu_scaling', '-u', str(freq) + 'GHz'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc = Popen(['./cpu_scaling', '-u', str(freq) + 'GHz'], stdin =PIPE, stdout=PIPE, stderr=PIPE)
         stdout, stderr = proc.communicate()
         print (stdout.decode("utf-8"))
 
@@ -54,7 +56,7 @@ class Scheduler:
     # Log temperature during execution to optimize the existing model
     def _log_temp_(self, log_path=None):
         print ("log_temp starting")
-        proc = subprocess.Popen(['bash', 'record_temp.sh', log_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc = Popen(['bash', 'record_temp.sh', log_path], stdout=PIPE, stderr=PIPE)
         stdout, stderr = proc.communicate()
         print (stdout.decode("utf-8"))
         print ("log_temp ending")
@@ -78,9 +80,13 @@ class Scheduler:
         proc_log = Process(target=self._log_temp_, args=("path", ))
         proc_log.start()
 
-        proc_exec.join()
-        proc_log.join()
-
+        prog_dvfs = Process(target=self._dvfs_, args=("1.2", ))
+        prog_dvfs.start()
+        prog_dvfs.join()
+        
+        # Terminate temp monitor when execution finishes
+        if (proc_exec.join() is None):
+            proc_log.terminate()
 
 
 s = Scheduler("main.py", 75)
