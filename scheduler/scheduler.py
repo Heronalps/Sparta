@@ -7,20 +7,26 @@ from scipy.optimize import curve_fit
 from sklearn.metrics import mean_squared_error, r2_score
 
 
-df_t = pd.read_csv("./tensor-time-vs-max.csv")
-df_mio = pd.read_csv("./matmul_io.csv")
-df_mnist = pd.read_csv("./mnist.csv")
+df_t = pd.read_csv("./data/tensor-time-vs-max.csv")
+df_mio = pd.read_csv("./data/matmul_io.csv")
+df_mnist = pd.read_csv("./data/mnist.csv")
 
 class Scheduler:
     def __init__(self, path=None, temp=None):
-        self.temp = temp
+        self.temp_threshold = temp
+        self.temp_start = None
         self.pkg_path = path
-        self.model = {}
+        self.model = None
+        self.freq = None
+        self.temp_log = []
         self.exec = {
             "py"  : "python" ,
             "out" : "./"     , 
         }
-        self.temp_log = []
+        
+    def __repr__(self):
+        return "threshold: {0} \n temp_start : {1} \n model : {2} \n freq : {3} \n temp_log : {4} \n ".format(self.temp_threshold, 
+        self.temp_start, self.model, self.freq, self.temp_log)
 
     # Execute the program based on the suffix
     def _execute_(self):
@@ -55,22 +61,19 @@ class Scheduler:
         print ("exec ending")
 
 
-    # Adjust CPU performance given a frequency
-    def _dvfs_(self, freq):
-        proc = Popen(['./cpu_scaling', '-u', str(freq) + 'GHz'], stdin =PIPE, stdout=PIPE, stderr=PIPE)
+    # Adjust CPU performance given the self.freq
+    def _dvfs_(self):
+        proc = Popen(['./cpu_scaling', '-u', str(self.freq) + 'GHz'], stdin =PIPE, stdout=PIPE, stderr=PIPE)
         stdout, stderr = proc.communicate()
         print (stdout.decode("utf-8"))
 
 
     # Log temperature during execution to optimize the existing model
-    def _log_temp_(self, log_path=None):
+    def _log_temp_(self, times=math.inf):
         print ("log_temp starting")
         
-        # proc = Popen(['bash', 'record_temp.sh', log_path], stdout=PIPE, stderr=PIPE)
-        # stdout, stderr = proc.communicate()
-        # print (stdout.decode("utf-8"))
         # Read temperature of current execution
-        while (True):
+        while (times):
             proc = Popen(["sensors"], stdout=PIPE, stderr=PIPE)
             stdout, stderr = proc.communicate()
             stdout = stdout.decode("utf-8")
@@ -79,19 +82,19 @@ class Scheduler:
                 self._log_temp_.append(match.group(1))
             print (self.temp_log)
             time.sleep(1)
+            times -= 1
 
 
-    # Regress on logged data and return a recommanded frequency based on the regression
-    def _extrapolate_(self, temp, data_path=None):
-        pass
+    # Regress against logged data
+    # Update self.freq based on temperature threshold
+    def _extrapolate_(self):
+        self.model = self._log_regress_(df_mio, df_t, "Freq", "max2")        
+        self.freq = self.model.predict([[self.temp_threshold - self.temp_start]])
 
-
-    # Update the model based on the last run
-    def _update_model_(self):
-        pass
 
     # Linear regression on the dfvs frequency by temperature threshold
     # a + b * [log(temp_target) - log(temp_start)] = Freq
+    # Returns a regression model for extrapolation
     def _log_regress_(self, df_benchmark, df_target, header1, header2):
         #X = [log(temp_target) - log(start_temp)]
         #Y = Freq
@@ -128,16 +131,20 @@ class Scheduler:
 
     # Run scheduler
     def run(self):
+        # Record the starting temperature
+        self._log_temp_(1)
+        self.temp_start = self.temp_log[0]
+
+        # Update model and designated frequency
+        self._extrapolate_()
+        self._dvfs_()
+
         proc_exec = Process(target=self._execute_)
         proc_exec.start()
 
         proc_log = Process(target=self._log_temp_, args=("log_path", ))
         proc_log.start()
 
-        prog_dvfs = Process(target=self._dvfs_, args=("1.2", ))
-        prog_dvfs.start()
-        prog_dvfs.join()
-        
         # Terminate temp monitor when execution finishes
         if (proc_exec.join() is None):
             proc_log.terminate()
@@ -145,4 +152,6 @@ class Scheduler:
 
 
 s = Scheduler("main.py", 75)
+print (repr(s))
 s.run()
+print (repr(s))

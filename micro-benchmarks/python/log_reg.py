@@ -36,6 +36,8 @@ def log_reg(df1, df2, header1, header2):
     Y1_plot = regr.predict(X1)
     Y2_plot = regr.predict(X2)
 
+    print ("predict : {}".format(regr.predict([[0.3]])))
+
     # plt.scatter(X1, Y1, label="Time vs Max Temp")
     # plt.plot(X1, Y1_plot, 'r-')
     # plt.xlabel("Time")
