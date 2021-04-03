@@ -4,6 +4,7 @@ import pandas as pd
 from subprocess import Popen, PIPE
 from multiprocessing import Process
 from scipy.optimize import curve_fit
+from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
 
 
@@ -25,8 +26,8 @@ class Scheduler:
         }
         
     def __repr__(self):
-        return "threshold: {0} \n temp_start : {1} \n model : {2} \n freq : {3} \n temp_log : {4} \n ".format(self.temp_threshold, 
-        self.temp_start, self.model, self.freq, self.temp_log)
+        return "======\nthreshold: {0} \ntemp_start : {1} \nmodel : {2} \nfreq : {3} \ntemp_log : {4} \n======\n ".format(
+                self.temp_threshold, self.temp_start, self.model, self.freq, self.temp_log)
 
     # Execute the program based on the suffix
     def _execute_(self):
@@ -79,8 +80,7 @@ class Scheduler:
             stdout = stdout.decode("utf-8")
             match = re.search("Package\sid\s0:\s*\+([0-9]*\.[0-9])", stdout)
             if (match):
-                self._log_temp_.append(match.group(1))
-            print (self.temp_log)
+                self.temp_log.append(float(match.group(1)))
             time.sleep(1)
             times -= 1
 
@@ -88,8 +88,8 @@ class Scheduler:
     # Regress against logged data
     # Update self.freq based on temperature threshold
     def _extrapolate_(self):
-        self.model = self._log_regress_(df_mio, df_t, "Freq", "max2")        
-        self.freq = self.model.predict([[self.temp_threshold - self.temp_start]])
+        self.model = self._log_regress_(df_mio, df_t, "Freq", "max2")
+        self.freq = self.model.predict([[np.log(self.temp_threshold) - np.log(self.temp_start)]])[0]
 
 
     # Linear regression on the dfvs frequency by temperature threshold
@@ -98,14 +98,14 @@ class Scheduler:
     def _log_regress_(self, df_benchmark, df_target, header1, header2):
         #X = [log(temp_target) - log(start_temp)]
         #Y = Freq
-        X1 = np.log(df1[header2]) - np.log(df1[header2][0])
-        Y1 = df1[header1] 
+        X1 = np.log(df_benchmark[header2]) - np.log(df_benchmark[header2][0])
+        Y1 = df_benchmark[header1] 
 
-        X2 = np.log(df2[header2]) - np.log(df2[header2][0])
-        Y2 = df2[header1] 
+        X2 = np.log(df_target[header2]) - np.log(df_target[header2][0])
+        Y2 = df_target[header1] 
 
-        X1 = X1[:, np.newaxis]
-        X2 = X2[:, np.newaxis]
+        X1 = X1.to_numpy()[:, np.newaxis]
+        X2 = X2.to_numpy()[:, np.newaxis]
 
         regr = linear_model.LinearRegression()
         regr.fit(X1, Y1)
@@ -142,7 +142,7 @@ class Scheduler:
         proc_exec = Process(target=self._execute_)
         proc_exec.start()
 
-        proc_log = Process(target=self._log_temp_, args=("log_path", ))
+        proc_log = Process(target=self._log_temp_)
         proc_log.start()
 
         # Terminate temp monitor when execution finishes
@@ -151,7 +151,7 @@ class Scheduler:
             print ("log_temp ending")
 
 
-s = Scheduler("main.py", 75)
+s = Scheduler("a.out", 75.0)
 print (repr(s))
 s.run()
 print (repr(s))
