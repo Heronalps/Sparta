@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 import math
 from sklearn.metrics import mean_squared_error
+from sklearn import linear_model
 
 df_t = pd.read_csv("./tensor-time-vs-max.csv")
 df_mio = pd.read_csv("./matmul_io.csv")
@@ -14,21 +15,26 @@ def log_func(x, a, b):
     return a + b * x
 
 def log_reg(df1, df2, header1, header2):
-    #X = Time
-    #Y = Temperature
-    X1 = df1[header1]
-    Y1 = np.log(df1[header2])
+    #X = [log(temp_target) - log(start_temp)]
+    #Y = Freq
+    X1 = np.log(df1[header2]) - np.log(df1[header2][0])
+    Y1 = df1[header1] 
 
-    X2 = df2[header1]
-    Y2 = np.log(df2[header2])
+    X2 = np.log(df2[header2]) - np.log(df2[header2][0])
+    Y2 = df2[header1] 
 
-    popt, pcov = curve_fit(log_func, X1, Y1)
-    print ("a = {}".format(popt[0]))
-    print ("b = {}".format(popt[1]))
+    X1 = X1[:, np.newaxis]
+    X2 = X2[:, np.newaxis]
+
+    regr = linear_model.LinearRegression()
+    regr.fit(X1, Y1)
+
+    print('Intercept: \n', regr.intercept_)
+    print('Coefficients: \n', regr.coef_)
 
     # Plot the data :
-    Y1_plot = log_func(X1, popt[0], popt[1])
-    Y2_plot = log_func(X2, popt[0], popt[1])
+    Y1_plot = regr.predict(X1)
+    Y2_plot = regr.predict(X2)
 
     # plt.scatter(X1, Y1, label="Time vs Max Temp")
     # plt.plot(X1, Y1_plot, 'r-')
@@ -49,6 +55,6 @@ def log_reg(df1, df2, header1, header2):
     print ("========================")
 
 if __name__ == "__main__":
-    log_reg(df_mio, df_t, "time1", "max1")
-    log_reg(df_mio, df_t, "time2", "max2")
-    log_reg(df_mio, df_t, "time3", "max3")
+    log_reg(df_mio, df_t, "Freq", "max1")
+    log_reg(df_mio, df_t, "Freq", "max2")
+    log_reg(df_mio, df_t, "Freq", "max3")

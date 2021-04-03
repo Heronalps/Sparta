@@ -10,6 +10,7 @@ df_t = pd.read_csv("./tensor-time-vs-max.csv")
 df_mio = pd.read_csv("./matmul_io.csv")
 df_mnist = pd.read_csv("./mnist.csv")
 
+# Rich's Proposal
 def log_reg(df_benchmark, df_target, header1, header2):
     #X, header1 = Time
     #Y, header2 = Temperature
