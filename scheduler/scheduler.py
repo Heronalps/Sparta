@@ -22,7 +22,7 @@ class Scheduler:
         self.temp_log = []
         self.exec = {
             "py"  : "python" ,
-            "out" : "./"     , 
+            "out" : ""       , 
         }
         
     def __repr__(self):
@@ -56,7 +56,8 @@ class Scheduler:
         
         # self._log_temp_
         print ("exec starting")
-        proc = Popen([self.exec[suffix], path + filename], stdout=PIPE, stderr=PIPE)
+        # shell=True executes commands through bash shell
+        proc = Popen([self.exec[suffix] + ' ' + path + filename], shell=True, stdout=PIPE, stderr=PIPE)
         stdout, stderr = proc.communicate()
         print (stdout.decode("utf-8"))
         print ("exec ending")
@@ -151,7 +152,7 @@ class Scheduler:
             print ("log_temp ending")
 
 
-s = Scheduler("a.out", 75.0)
+s = Scheduler("matmul.out", 75.0)
 print (repr(s))
 s.run()
 print (repr(s))
