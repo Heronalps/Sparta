@@ -13,10 +13,11 @@ df_mio = pd.read_csv("./data/matmul_io.csv")
 df_mnist = pd.read_csv("./data/mnist.csv")
 
 class Scheduler:
-    def __init__(self, path=None, temp=None):
+    def __init__(self, pkg_path=None, log_path=None, temp=None):
         self.temp_threshold = temp
         self.temp_start = None
-        self.pkg_path = path
+        self.pkg_path = pkg_path
+        self.log_path = log_path
         self.model = None
         self.freq = None
         self.temp_log = []
@@ -67,12 +68,12 @@ class Scheduler:
     def _dvfs_(self):
         proc = Popen(['./cpu_scaling', '-u', str(self.freq) + 'GHz'], stdin =PIPE, stdout=PIPE, stderr=PIPE)
         stdout, stderr = proc.communicate()
-        print (stdout.decode("utf-8"))
+        # print (stdout.decode("utf-8"))
 
 
     # Log temperature during execution to optimize the existing model
-    def _log_temp_(self, times=math.inf):
-        print ("log_temp starting")
+    def _log_temp_realtime_(self, times=math.inf):
+        # print ("Logging temp realtime")
         
         # Read temperature of current execution
         while (times):
@@ -84,6 +85,12 @@ class Scheduler:
                 self.temp_log.append(float(match.group(1)))
             time.sleep(1)
             times -= 1
+
+    # Log temperature in the file system
+    def _log_temp_file_(self):
+        # print ("Logging temp in file")
+        proc = Popen(['bash', 'record_temp.sh', self.log_path], stdout=PIPE, stderr=PIPE)
+        proc.communicate()
 
 
     # Regress against logged data
@@ -133,26 +140,30 @@ class Scheduler:
     # Run scheduler
     def run(self):
         # Record the starting temperature
-        self._log_temp_(1)
+        self._log_temp_realtime_(1)
         self.temp_start = self.temp_log[0]
 
         # Update model and designated frequency
         self._extrapolate_()
         self._dvfs_()
+       
+        proc_log_temp_rt = Process(target=self._log_temp_realtime_)
+        proc_log_temp_rt.start()
+        
+        proc_log_temp_f = Process(target=self._log_temp_file_)
+        proc_log_temp_f.start()
 
         proc_exec = Process(target=self._execute_)
         proc_exec.start()
 
-        proc_log = Process(target=self._log_temp_)
-        proc_log.start()
-
         # Terminate temp monitor when execution finishes
         if (proc_exec.join() is None):
-            proc_log.terminate()
+            proc_log_temp_rt.terminate()
+            proc_log_temp_f.terminate()
             print ("log_temp ending")
 
 
-s = Scheduler("matmul.out", 75.0)
+s = Scheduler("matmul.out", "temp_log_path", 75.0)
 print (repr(s))
 s.run()
 print (repr(s))
