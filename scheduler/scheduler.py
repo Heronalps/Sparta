@@ -40,18 +40,12 @@ class Scheduler:
         suffix = ''
         path = './'
         filename = ''
-        match = re.search("\.(\w*)", self.pkg_path)
-        if (match):
-            suffix = match.group(1)
-        
-        match = re.search("(\/\w*)+(?!\w*\.\w*)", self.pkg_path)
+        match = re.search("^(.*\/)(\w*\.(\w*))", self.pkg_path)
         if (match):
             path = match.group(1)
+            filename = match.group(2)
+            suffix = match.group(3)
         
-        match = re.search("\w*\.\w*", self.pkg_path)
-        if (match):
-            filename = match.group(0)
-
         # print("suffix : {}".format(suffix))
         # print("path : {}".format(path))
         # print("filename : {}".format(filename))
@@ -59,7 +53,9 @@ class Scheduler:
         # self._log_temp_
         print ("exec starting")
         # shell=True executes commands through bash shell
-        proc = Popen([self.exec[suffix] + ' ' + path + filename], shell=True, stdout=PIPE, stderr=PIPE)
+        cmd = self.exec[suffix] + ' ' + filename
+        # print (cmd)
+        proc = Popen([cmd], shell=True, cwd=path.encode('unicode_escape'), stdout=PIPE, stderr=PIPE)
         stdout, stderr = proc.communicate()
         print (stdout.decode("utf-8"))
         print ("exec ending")
@@ -102,7 +98,7 @@ class Scheduler:
     def _extrapolate_(self):
         self.model = self._log_regress_(df_mio, df_t, "Freq", "max2")
         self.freq = self.model.predict([[np.log(self.temp_threshold) - np.log(self.temp_start)]])[0]
-        # self.freq += 0.4
+        self.freq -= 0.03
 
     # Linear regression on the dfvs frequency by temperature threshold
     # a + b * [log(temp_target) - log(temp_start)] = Freq
@@ -167,7 +163,14 @@ class Scheduler:
             proc_log_temp_f.terminate()
 
 
-s = Scheduler("matmul.out", "temp_log_path", 75.0)
-print (repr(s))
+s = Scheduler("../micro-benchmarks/python/Image_cls.py", "temp_log_path", 75.0)
 s.run()
 print (repr(s))
+for _ in range(10):
+    s.run()
+    count = 0
+    for i in s.temp_log:
+        if i > s.temp_threshold:
+            count += 1
+    print ("Accuracy : {}".format(1 - (count / len(s.temp_log))))
+    # print (repr(s))

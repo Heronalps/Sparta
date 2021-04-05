@@ -129,7 +129,7 @@ def handler(event, context):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('zip_path')
-    parser.add_argument('num_thread')
+    parser.add_argument('zip_path', nargs='?', default="../image_batch_2.zip")
+    parser.add_argument('num_thread', nargs='?', default=8)
     args = parser.parse_args()
     handler({"data" : {"zip_path" : args.zip_path, "num_thread" : args.num_thread}}, {})
