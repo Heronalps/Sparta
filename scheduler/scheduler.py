@@ -82,8 +82,10 @@ class Scheduler:
         stdout, stderr = proc.communicate()
         stdout = stdout.decode("utf-8")
         match = re.search("Package\sid\s0:\s*\+([0-9]*\.[0-9])", stdout)
+        temp = float(match.group(1))
         if (match):
-            self.temp_log.extend([float(match.group(1))])
+            self.temp_log.append(temp)
+        return temp
         
         
     # Log temperature in the file system
@@ -98,7 +100,7 @@ class Scheduler:
     def _extrapolate_(self):
         self.model = self._log_regress_(df_mio, df_t, "Freq", "max2")
         self.freq = self.model.predict([[np.log(self.temp_threshold) - np.log(self.temp_start)]])[0]
-        self.freq -= 0.03
+        self.freq += 0.35
 
     # Linear regression on the dfvs frequency by temperature threshold
     # a + b * [log(temp_target) - log(temp_start)] = Freq
@@ -140,8 +142,7 @@ class Scheduler:
     # Run scheduler
     def run(self):
         # Record the starting temperature
-        self._log_temp_realtime_(1)
-        self.temp_start = self.temp_log[0]
+        self.temp_start = self._log_temp_()
 
         # Update model and designated frequency
         self._extrapolate_()
@@ -164,10 +165,9 @@ class Scheduler:
 
 
 s = Scheduler("../micro-benchmarks/python/Image_cls.py", "temp_log_path", 75.0)
-s.run()
-print (repr(s))
 for _ in range(10):
     s.run()
+    print (repr(s))
     count = 0
     for i in s.temp_log:
         if i > s.temp_threshold:
