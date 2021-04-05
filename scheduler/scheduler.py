@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from subprocess import Popen, PIPE
 from multiprocessing import Process
+from threading import Thread       
 from scipy.optimize import curve_fit
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
@@ -28,7 +29,7 @@ class Scheduler:
         
     def __repr__(self):
         return "======\nthreshold: {0} \ntemp_start : {1} \nmodel : {2} \nfreq : {3} \ntemp_log : {4} \n======\n ".format(
-                self.temp_threshold, self.temp_start, self.model, self.freq, self.temp_log)
+                self.temp_threshold, self.temp_start, self.model, self.freq, self.temp_log[:])
 
     # Execute the program based on the suffix
     def _execute_(self):
@@ -66,30 +67,33 @@ class Scheduler:
 
     # Adjust CPU performance given the self.freq
     def _dvfs_(self):
-        proc = Popen(['./cpu_scaling', '-u', str(self.freq) + 'GHz'], stdin =PIPE, stdout=PIPE, stderr=PIPE)
+        proc = Popen(['./cpu_scaling', '-u', str(self.freq) + 'GHz'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
         stdout, stderr = proc.communicate()
         # print (stdout.decode("utf-8"))
 
 
-    # Log temperature during execution to optimize the existing model
     def _log_temp_realtime_(self, times=math.inf):
-        # print ("Logging temp realtime")
-        
-        # Read temperature of current execution
         while (times):
-            proc = Popen(["sensors"], stdout=PIPE, stderr=PIPE)
-            stdout, stderr = proc.communicate()
-            stdout = stdout.decode("utf-8")
-            match = re.search("Package\sid\s0:\s*\+([0-9]*\.[0-9])", stdout)
-            if (match):
-                self.temp_log.append(float(match.group(1)))
+            self._log_temp_()
             time.sleep(1)
             times -= 1
 
+    # Log temperature during execution to optimize the existing model
+    def _log_temp_(self):
+        
+        # Read temperature of current execution
+        proc = Popen(["sensors"], stdout=PIPE, stderr=PIPE)
+        stdout, stderr = proc.communicate()
+        stdout = stdout.decode("utf-8")
+        match = re.search("Package\sid\s0:\s*\+([0-9]*\.[0-9])", stdout)
+        if (match):
+            self.temp_log.extend([float(match.group(1))])
+        
+        
     # Log temperature in the file system
     def _log_temp_file_(self):
         # print ("Logging temp in file")
-        proc = Popen(['bash', 'record_temp.sh', self.log_path], stdout=PIPE, stderr=PIPE)
+        proc = Popen(['exec', 'bash', 'record_temp.sh', self.log_path], stdout=PIPE, stderr=PIPE, shell=True)
         proc.communicate()
 
 
@@ -98,7 +102,7 @@ class Scheduler:
     def _extrapolate_(self):
         self.model = self._log_regress_(df_mio, df_t, "Freq", "max2")
         self.freq = self.model.predict([[np.log(self.temp_threshold) - np.log(self.temp_start)]])[0]
-
+        # self.freq += 0.4
 
     # Linear regression on the dfvs frequency by temperature threshold
     # a + b * [log(temp_target) - log(temp_start)] = Freq
@@ -146,11 +150,13 @@ class Scheduler:
         # Update model and designated frequency
         self._extrapolate_()
         self._dvfs_()
-       
-        proc_log_temp_rt = Process(target=self._log_temp_realtime_)
+
+        proc_log_temp_rt = Thread(target=self._log_temp_realtime_)
+        proc_log_temp_rt.daemon = True
         proc_log_temp_rt.start()
         
         proc_log_temp_f = Process(target=self._log_temp_file_)
+        proc_log_temp_f.daemon = True
         proc_log_temp_f.start()
 
         proc_exec = Process(target=self._execute_)
@@ -158,9 +164,7 @@ class Scheduler:
 
         # Terminate temp monitor when execution finishes
         if (proc_exec.join() is None):
-            proc_log_temp_rt.terminate()
             proc_log_temp_f.terminate()
-            print ("log_temp ending")
 
 
 s = Scheduler("matmul.out", "temp_log_path", 75.0)

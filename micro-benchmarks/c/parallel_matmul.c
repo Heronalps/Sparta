@@ -5,7 +5,7 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include <omp.h>
-#define N 7000
+#define N 1500
 #define M 1 
 
 struct matrix_s {
