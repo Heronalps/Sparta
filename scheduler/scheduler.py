@@ -162,15 +162,3 @@ class Scheduler:
         # Terminate temp monitor when execution finishes
         if (proc_exec.join() is None):
             proc_log_temp_f.terminate()
-
-
-s = Scheduler("../micro-benchmarks/python/Image_cls.py", "temp_log_path", 75.0)
-for _ in range(10):
-    s.run()
-    print (repr(s))
-    count = 0
-    for i in s.temp_log:
-        if i > s.temp_threshold:
-            count += 1
-    print ("Accuracy : {}".format(1 - (count / len(s.temp_log))))
-    # print (repr(s))
