@@ -6,6 +6,7 @@
 /data/**
 **/image_buffer/**
 **/matrix_mul/**
+**/__pycache__/
 *.zip
 *.PNG
 *.JPG
