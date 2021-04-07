@@ -1,0 +1,10 @@
+tensorflow
+matplotlib
+keras
+Pillow
+gpuinfo
+pymysql 
+requests
+scikit-learn==0.21.3
+scipy==1.1.0
+numpy==1.18
