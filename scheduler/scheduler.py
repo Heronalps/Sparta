@@ -82,6 +82,7 @@ class Scheduler:
             temp = float(match.group(1))
             if (match):
                 self.temp_log_curr.append(temp)
+                print (self.temp_log)
                 # Record the starting temperature
                 if (self.temp_start is None):
                     self.temp_start = temp
