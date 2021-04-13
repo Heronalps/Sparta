@@ -1,4 +1,4 @@
-import re, time, math
+import re, time, math, random
 import numpy as np
 import pandas as pd
 from subprocess import Popen, PIPE
@@ -32,20 +32,20 @@ class Scheduler:
         # Mapping max temperature => freq
         self.max_temp_freq_map = {}
 
+        # Control while true thread
+        self.stop_threads = False
+
         self.exec = {
             "py"  : "python" ,
             "out" : ""       , 
         }
         
     def __repr__(self):
-        return "======\nthreshold: {0} \ntemp_start : {1} \nmodel : {2} \nfreq : {3} \ntemp_log : {4} \n======\n ".format(
-                self.temp_threshold, self.temp_start, self.model, self.freq, self.temp_log[:])
+        return "======\nthreshold: {0} \ntemp_start : {1} \nmodel : {2} \nfreq : {3} \ntemp_log_curr : {4} \n======\n ".format(
+                self.temp_threshold, self.temp_start, self.model, self.freq, self.temp_log_curr[:])
 
     # Execute the program based on the suffix
-    def _execute_(self):
-        # Delay the execution for 1 second to make sure the starting temp is recorded    
-        time.sleep(1)
-        
+    def _execute_(self): 
         # capture the suffix of the program
         suffix = ''
         path = './'
@@ -69,32 +69,49 @@ class Scheduler:
         stdout, stderr = proc.communicate()
         print (stdout.decode("utf-8"))
         print ("exec ending")
-            
+           
+
+    # Wrap function of log_temp in order to flush temp log data
+    def _log_temp_realtime_(self, times=math.inf): 
+        while(times):
+            times -= 1
+            self._log_temp_()
+            time.sleep(1)
+            if self.stop_threads:
+                break
+
 
     # Log temperature during execution to optimize the existing model
-    def _log_temp_(self):
-        while (True):
-            # Read temperature of current execution
-            proc = Popen(["sensors"], stdout=PIPE, stderr=PIPE)
-            stdout, stderr = proc.communicate()
-            stdout = stdout.decode("utf-8")
-            match = re.search("Package\sid\s0:\s*\+([0-9]*\.[0-9])", stdout)
-            temp = float(match.group(1))
-            if (match):
-                self.temp_log_curr.append(temp)
-                print (self.temp_log)
-                # Record the starting temperature
-                if (self.temp_start is None):
-                    self.temp_start = temp
+    def _log_temp_(self): 
+        # print ("_log_temp_ started")
+        # Read temperature of current execution
+        proc = Popen(["sensors"], stdout=PIPE, stderr=PIPE)
+        stdout, stderr = proc.communicate()
+        stdout = stdout.decode("utf-8")
+        match = re.search("Package\sid\s0:\s*\+([0-9]*\.[0-9])", stdout)
+        temp = float(match.group(1))
+        # print ("Temp : ", temp)
+        if (match):
+            self.temp_log_curr.append(temp)
+            # print (self.temp_log_curr)
+            # Record the starting temperature
+            if (self.temp_start is None):
+                self.temp_start = temp
 
-            if (len(self.temp_log_curr) >= CALIBRATION_PERIOD):
-                self.temp_log_all.extend(self.temp_log_curr)
-                log_temp = np.log(max(self.temp_log_curr)) - np.log(self.temp_start)
-                self.max_temp_freq_map[log_temp] = self.freq
-                self.temp_log_curr.clear()
+        if (len(self.temp_log_curr) >= CALIBRATION_PERIOD):
+            self.temp_log_all.extend(self.temp_log_curr)
+            log_temp_delta = np.log(max(self.temp_log_curr)) - np.log(self.temp_start)
+            
+            # Perturb temperature delta to prevent duplicate data point 
+            log_temp_delta += random.uniform(0.001, 0.01)
+            # Perturb the designated frequency to secure at least two data points for regression
+            self.freq -= random.uniform(0.001, 0.01)
+
+            print ("TEMP DELTA : {}".format(log_temp_delta))
+            self.max_temp_freq_map[log_temp_delta] = self.freq
+            self.temp_log_curr.clear()
         
-            time.sleep(1)
-        
+       
         
     # Log temperature in the file system
     def _log_temp_file_(self):
@@ -112,8 +129,6 @@ class Scheduler:
         X2 = np.log(df_target[header2]) - np.log(df_target[header2][0])
         Y2 = df_target[header1] 
 
-        X1 = X1.to_numpy()[:, np.newaxis]
-        X2 = X2.to_numpy()[:, np.newaxis]
         return X1, X2, Y1, Y2
 
 
@@ -122,35 +137,67 @@ class Scheduler:
         Y1 = np.asarray(list(self.max_temp_freq_map.values()))
         return X1, Y1
 
-    # Regress against logged data
-    # Update self.freq based on temperature threshold
-    # Adjust CPU performance given the self.freq
-    def _extrapolate_(self):
-        while(True):
-            # Build regression model based on real time data if it has at least two data points
-            if len(self.max_temp_freq_map) >= 2:
-                X1, Y1 = self.retrieve_data_from_map()
-                self.model = self._log_regress_(X1, Y1)
-            
-            # Regression based on historical data
-            else:
-                X1, X2, Y1, Y2 = self.retrieve_data_from_dataframe(df_mio, df_t, Y_HEADER, X_HEADER)
-                self.model = self._log_regress_(X1, X2, Y1, Y2)
 
-            self.freq = self.model.predict([[np.log(self.temp_threshold) - np.log(self.temp_start)]])[0]
-            self.freq += 0.35
-            proc = Popen(['./cpu_scaling', '-u', str(self.freq) + 'GHz'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-            stdout, stderr = proc.communicate()
-            # print (stdout.decode("utf-8"))
-            
+    def _extrapolate_realtime_(self): 
+        while(True):
+            self._extrapolate_()
+            if self.stop_threads:
+                break
             # Rebuild regression model every 60 seconds on two new data points 
             time.sleep(CALIBRATION_PERIOD * 2)
 
 
+
+
+    # Regress against logged data
+    # Update self.freq based on temperature threshold
+    # Adjust CPU performance given the self.freq
+    def _extrapolate_(self): 
+        # print ("extra started")
+        # Build regression model based on real time data if it has at least two data points
+        
+        if len(self.max_temp_freq_map) >= 2:
+            X1, Y1 = self.retrieve_data_from_map()
+            print ("X1 {}".format(X1))
+            print ("Y1 {}".format(Y1))
+            self.model = self._log_regress_(X1, Y1)
+            
+        # Regression based on historical data
+        else:
+            X1, X2, Y1, Y2 = self.retrieve_data_from_dataframe(df_mio, df_t, Y_HEADER, X_HEADER)
+            self.model = self._log_regress_(X1, Y1, X2, Y2)
+            
+        while(self.temp_start is None):
+            time.sleep(0.5)
+        # print (self.model)
+        
+        log_temp_delta = [[np.log(self.temp_threshold) - np.log(self.temp_start)]]
+        self.freq = self.model.predict(log_temp_delta)[0]
+        # self.freq += 0.35
+
+        print ("Freq : {} Log_temp_delta : {}".format(self.freq, log_temp_delta))
+        proc = Popen(['./cpu_scaling', '-u', str(self.freq) + 'GHz'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = proc.communicate()
+        # print (stdout.decode("utf-8"))
+            
+           
     # Linear regression on the dfvs frequency by temperature threshold
     # a + b * [log(temp_target) - log(temp_start)] = Freq
     # Returns a regression model for extrapolation
     def _log_regress_(self, X1, Y1, X2=None, Y2=None):
+        # print ("Regression started")
+        # Reshape from [X, ] to [X, 1]
+        
+        if isinstance(X1, pd.core.series.Series):
+            X1 = X1.to_numpy()[:, np.newaxis]
+        elif X1 is not None:
+            X1 = X1[:, np.newaxis]
+        
+        if isinstance(X2, pd.core.series.Series):
+            X2 = X2.to_numpy()[:, np.newaxis]
+        elif X2 is not None:
+            X2 = X2[:, np.newaxis]
+
         regr = linear_model.LinearRegression()
         regr.fit(X1, Y1)
 
@@ -160,9 +207,9 @@ class Scheduler:
         # Plot the data :
         Y1_plot = regr.predict(X1)
         print ("RMSE Y1 : {}".format(math.sqrt(mean_squared_error(Y1, Y1_plot))))
-        Accuracy1 = r2_score(Y1,Y1_plot)
+        Accuracy1 = r2_score(Y1, Y1_plot)
         print ("Y1 Accuracy: {}".format(Accuracy1))
-        if X2 and Y2:
+        if (X2 is not None and Y2 is not None):
             Y2_plot = regr.predict(X2)
             print ("RMSE Y2 : {}".format(math.sqrt(mean_squared_error(Y2, Y2_plot))))
             Accuracy2 = r2_score(Y2, Y2_plot)
@@ -173,22 +220,36 @@ class Scheduler:
 
     # Run scheduler
     def run(self):
-        proc_log_temp_rt = Thread(target=self._log_temp_)
+
+        self.stop_threads = False
+
+        proc_log_temp_rt = Thread(target=self._log_temp_realtime_)
         proc_log_temp_rt.daemon = True
         proc_log_temp_rt.start()
-        
+        # print ("Start logging real time temperature")
+
         proc_log_temp_f = Process(target=self._log_temp_file_)
         proc_log_temp_f.daemon = True
         proc_log_temp_f.start()
+        # print ("Start logging temperature in file")
 
-        proc_extrapolate = Thread(target=self._extrapolate_)
+        proc_extrapolate = Thread(target=self._extrapolate_realtime_)
         proc_extrapolate.daemon = True
         proc_extrapolate.start()
+        # print ("Start Regression")
+
+        # Delay the execution for 1  second to make sure the starting temp is recorded    
+        time.sleep(1)
 
         proc_exec = Process(target=self._execute_)
         proc_exec.start()
 
         # Terminate temp monitor when execution finishes
         if (proc_exec.join() is None):
+            self.stop_threads = True
+            proc_log_temp_rt.join()
+            proc_extrapolate.join()
             proc_log_temp_f.terminate()
-            proc_extrapolate.terminate()
+
+        
+        time.sleep(1)

@@ -8,11 +8,15 @@ def main():
         s.run()
         print (repr(s))
         count = 0
-        for i in s.temp_log:
+        for i in s.temp_log_curr:
             if i > s.temp_threshold:
                 count += 1
-        print ("len : {}".format(len(s.temp_log)))
-        print ("Accuracy : {}".format(1 - (count / len(s.temp_log))))
+        for i in s.temp_log_all:
+            if i > s.temp_threshold:
+                count += 1
+        length = len(s.temp_log_curr) + len(s.temp_log_all)
+        print ("len : {}".format(length))
+        print ("Accuracy : {}".format(1 - (count / length)))
 
 if __name__ == "__main__":
     main()
