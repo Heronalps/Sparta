@@ -1,4 +1,4 @@
-import re, time, math
+import re, time, math, random
 import numpy as np
 import pandas as pd
 from subprocess import Popen, PIPE
@@ -125,20 +125,29 @@ class Scheduler:
     # Regress against logged data
     # Update self.freq based on temperature threshold
     # Adjust CPU performance given the self.freq
-    def _extrapolate_(self):
+    def _extrapolate_(self, eps=0.1):
+        times = 1
         while(True):
-            # Build regression model based on real time data if it has at least two data points
-            if len(self.max_temp_freq_map) >= 2:
-                X1, Y1 = self.retrieve_data_from_map()
-                self.model = self._log_regress_(X1, Y1)
-            
-            # Regression based on historical data
-            else:
+            p = np.random.random()
+            threshold = eps/times
+            # Regression based on historical data, which is guaranteed in first few extrapolations
+            if len(self.max_temp_freq_map) <= 2:
                 X1, X2, Y1, Y2 = self.retrieve_data_from_dataframe(df_mio, df_t, Y_HEADER, X_HEADER)
                 self.model = self._log_regress_(X1, X2, Y1, Y2)
+                self.freq = self.model.predict([[np.log(self.temp_threshold) - np.log(self.temp_start)]])[0]
+            
+            elif p < threshold:
+                self.freq = random.uniform(0.8, 3.5)
+            
+            # Build regression model based on real time data if it has at least two data points
+            else:
+                X1, Y1 = self.retrieve_data_from_map()
+                self.model = self._log_regress_(X1, Y1)
+                self.freq = self.model.predict([[np.log(self.temp_threshold) - np.log(self.temp_start)]])[0]
+            
+            times += 1
 
-            self.freq = self.model.predict([[np.log(self.temp_threshold) - np.log(self.temp_start)]])[0]
-            self.freq += 0.35
+            # self.freq += 0.35
             proc = Popen(['./cpu_scaling', '-u', str(self.freq) + 'GHz'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
             stdout, stderr = proc.communicate()
             # print (stdout.decode("utf-8"))
