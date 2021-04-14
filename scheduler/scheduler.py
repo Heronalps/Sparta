@@ -152,27 +152,32 @@ class Scheduler:
     # Regress against logged data
     # Update self.freq based on temperature threshold
     # Adjust CPU performance given the self.freq
-    def _extrapolate_(self): 
-        # print ("extra started")
-        # Build regression model based on real time data if it has at least two data points
-        
-        if len(self.max_temp_freq_map) >= 2:
-            X1, Y1 = self.retrieve_data_from_map()
-            print ("X1 {}".format(X1))
-            print ("Y1 {}".format(Y1))
-            self.model = self._log_regress_(X1, Y1)
+    def _extrapolate_(self, eps=0.1):
+        times = 1
+        log_temp_delta = [[np.log(self.temp_threshold) - np.log(self.temp_start)]]
+        while(True):
+            p = np.random.random()
+            threshold = eps/times
+            # Regression based on historical data, which is guaranteed in first few extrapolations
+            if len(self.max_temp_freq_map) <= 2:
+                X1, X2, Y1, Y2 = self.retrieve_data_from_dataframe(df_mio, df_t, Y_HEADER, X_HEADER)
+                self.model = self._log_regress_(X1, X2, Y1, Y2)
+                self.freq = self.model.predict(log_temp_delta)[0]
+            elif p < threshold:
+                self.freq = random.uniform(0.8, 3.5)
             
-        # Regression based on historical data
-        else:
-            X1, X2, Y1, Y2 = self.retrieve_data_from_dataframe(df_mio, df_t, Y_HEADER, X_HEADER)
-            self.model = self._log_regress_(X1, Y1, X2, Y2)
-            
+            # Build regression model based on real time data if it has at least two data points
+            else:
+                X1, Y1 = self.retrieve_data_from_map()
+                self.model = self._log_regress_(X1, Y1)    
+                self.freq = self.model.predict(log_temp_delta)[0]
+            times += 1
+
+           
         while(self.temp_start is None):
             time.sleep(0.5)
         # print (self.model)
         
-        log_temp_delta = [[np.log(self.temp_threshold) - np.log(self.temp_start)]]
-        self.freq = self.model.predict(log_temp_delta)[0]
         # self.freq += 0.35
 
         print ("Freq : {} Log_temp_delta : {}".format(self.freq, log_temp_delta))
