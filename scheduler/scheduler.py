@@ -127,33 +127,38 @@ class Scheduler:
     # Adjust CPU performance given the self.freq
     def _extrapolate_(self, eps=0.1):
         times = 1
-        while(True):
-            p = np.random.random()
-            threshold = eps/times
-            # Regression based on historical data, which is guaranteed in first few extrapolations
-            if len(self.max_temp_freq_map) <= 2:
-                X1, X2, Y1, Y2 = self.retrieve_data_from_dataframe(df_mio, df_t, Y_HEADER, X_HEADER)
-                self.model = self._log_regress_(X1, X2, Y1, Y2)
-                self.freq = self.model.predict([[np.log(self.temp_threshold) - np.log(self.temp_start)]])[0]
-            
-            elif p < threshold:
-                self.freq = random.uniform(0.8, 3.5)
-            
-            # Build regression model based on real time data if it has at least two data points
-            else:
-                X1, Y1 = self.retrieve_data_from_map()
-                self.model = self._log_regress_(X1, Y1)
-                self.freq = self.model.predict([[np.log(self.temp_threshold) - np.log(self.temp_start)]])[0]
-            
-            times += 1
+        log_temp_delta = [[np.log(self.temp_threshold) - np.log(self.temp_start)]]
+        p = np.random.random()
+        threshold = EPSILON/times
+        # Regression based on historical data, which is guaranteed in first few extrapolations
+        if len(self.max_temp_freq_map) <= 2:
+            X1, X2, Y1, Y2 = self.retrieve_data_from_dataframe(df_mio, df_t, Y_HEADER, X_HEADER)
+            self.model = self._log_regress_(X1, Y1, X2, Y2)
+            self.freq = self.model.predict(log_temp_delta)[0]
+        elif p < threshold:
+            # To guarantee the new freq would not lead to a excessive temperature over threshold
+            # The recorded log is still good to extrapolate (not intrapolate) the regression
+            self.freq = random.uniform(0.8, self.freq)
+           
+        # Build regression model based on real time data if it has at least two data points
+        else:
+            X1, Y1 = self.retrieve_data_from_map()
+            self.model = self._log_regress_(X1, Y1)    
+            self.freq = self.model.predict(log_temp_delta)[0]
+        times += 1
 
-            # self.freq += 0.35
-            proc = Popen(['./cpu_scaling', '-u', str(self.freq) + 'GHz'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-            stdout, stderr = proc.communicate()
-            # print (stdout.decode("utf-8"))
-            
-            # Rebuild regression model every 60 seconds on two new data points 
-            time.sleep(CALIBRATION_PERIOD * 2)
+           
+        while(self.temp_start is None):
+            time.sleep(0.5)
+        # print (self.model)
+        
+        # self.freq += 0.35
+        proc = Popen(['./cpu_scaling', '-u', str(self.freq) + 'GHz'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = proc.communicate()
+        # print (stdout.decode("utf-8"))
+        
+        # Rebuild regression model every 60 seconds on two new data points 
+        time.sleep(CALIBRATION_PERIOD * 2)
 
 
     # Linear regression on the dfvs frequency by temperature threshold
