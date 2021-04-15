@@ -167,7 +167,7 @@ class Scheduler:
             self.freq = self.model.predict(log_temp_delta)[0]
         elif p < threshold:
             self.freq = random.uniform(0.8, 3.5)
-            
+           
         # Build regression model based on real time data if it has at least two data points
         else:
             X1, Y1 = self.retrieve_data_from_map()
