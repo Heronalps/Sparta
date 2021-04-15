@@ -15,6 +15,7 @@ df_mnist = pd.read_csv("./data/mnist.csv")
 
 # The number of seconds every regression and model calibration happens
 CALIBRATION_PERIOD = 30
+EPSILON = 0.5
 X_HEADER = "max2"
 Y_HEADER = "Freq"
 
@@ -29,6 +30,8 @@ class Scheduler:
         # Real time data log - max temperature & temp time series
         self.temp_log_curr = []
         self.temp_log_all = []
+        self.max_temp_log = []
+        self.freq_log = []
         # Mapping max temperature => freq
         self.max_temp_freq_map = {}
 
@@ -41,8 +44,8 @@ class Scheduler:
         }
         
     def __repr__(self):
-        return "======\nthreshold: {0} \ntemp_start : {1} \nmodel : {2} \nfreq : {3} \ntemp_log_curr : {4} \n======\n ".format(
-                self.temp_threshold, self.temp_start, self.model, self.freq, self.temp_log_curr[:])
+        return "======\nthreshold: {0} \ntemp_start : {1} \nmodel : {2} \nfreq : {3} \ntemp_log_all : {4} \n======\n ".format(
+                self.temp_threshold, self.temp_start, self.model, self.freq, self.temp_log_all[:])
 
     # Execute the program based on the suffix
     def _execute_(self): 
@@ -101,13 +104,15 @@ class Scheduler:
         if (len(self.temp_log_curr) >= CALIBRATION_PERIOD):
             self.temp_log_all.extend(self.temp_log_curr)
             log_temp_delta = np.log(max(self.temp_log_curr)) - np.log(self.temp_start)
-            
+            # Log the current max temp
+            self.max_temp_log.append(max(self.temp_log_curr))
             # Perturb temperature delta to prevent duplicate data point 
             log_temp_delta += random.uniform(0.001, 0.01)
             # Perturb the designated frequency to secure at least two data points for regression
             self.freq -= random.uniform(0.001, 0.01)
 
-            print ("TEMP DELTA : {}".format(log_temp_delta))
+            print ("TEMP DELTA : {} Freq : {}".format(log_temp_delta, self.freq))
+            self.freq_log.append(self.freq)
             self.max_temp_freq_map[log_temp_delta] = self.freq
             self.temp_log_curr.clear()
         
@@ -147,31 +152,28 @@ class Scheduler:
             time.sleep(CALIBRATION_PERIOD * 2)
 
 
-
-
     # Regress against logged data
     # Update self.freq based on temperature threshold
     # Adjust CPU performance given the self.freq
-    def _extrapolate_(self, eps=0.1):
+    def _extrapolate_(self):
         times = 1
         log_temp_delta = [[np.log(self.temp_threshold) - np.log(self.temp_start)]]
-        while(True):
-            p = np.random.random()
-            threshold = eps/times
-            # Regression based on historical data, which is guaranteed in first few extrapolations
-            if len(self.max_temp_freq_map) <= 2:
-                X1, X2, Y1, Y2 = self.retrieve_data_from_dataframe(df_mio, df_t, Y_HEADER, X_HEADER)
-                self.model = self._log_regress_(X1, X2, Y1, Y2)
-                self.freq = self.model.predict(log_temp_delta)[0]
-            elif p < threshold:
-                self.freq = random.uniform(0.8, 3.5)
+        p = np.random.random()
+        threshold = EPSILON/times
+        # Regression based on historical data, which is guaranteed in first few extrapolations
+        if len(self.max_temp_freq_map) <= 2:
+            X1, X2, Y1, Y2 = self.retrieve_data_from_dataframe(df_mio, df_t, Y_HEADER, X_HEADER)
+            self.model = self._log_regress_(X1, Y1, X2, Y2)
+            self.freq = self.model.predict(log_temp_delta)[0]
+        elif p < threshold:
+            self.freq = random.uniform(0.8, 3.5)
             
-            # Build regression model based on real time data if it has at least two data points
-            else:
-                X1, Y1 = self.retrieve_data_from_map()
-                self.model = self._log_regress_(X1, Y1)    
-                self.freq = self.model.predict(log_temp_delta)[0]
-            times += 1
+        # Build regression model based on real time data if it has at least two data points
+        else:
+            X1, Y1 = self.retrieve_data_from_map()
+            self.model = self._log_regress_(X1, Y1)    
+            self.freq = self.model.predict(log_temp_delta)[0]
+        times += 1
 
            
         while(self.temp_start is None):
@@ -211,13 +213,13 @@ class Scheduler:
 
         # Plot the data :
         Y1_plot = regr.predict(X1)
-        print ("RMSE Y1 : {}".format(math.sqrt(mean_squared_error(Y1, Y1_plot))))
         Accuracy1 = r2_score(Y1, Y1_plot)
+        print ("RMSE Y1 : {}".format(math.sqrt(mean_squared_error(Y1, Y1_plot))))
         print ("Y1 Accuracy: {}".format(Accuracy1))
         if (X2 is not None and Y2 is not None):
             Y2_plot = regr.predict(X2)
-            print ("RMSE Y2 : {}".format(math.sqrt(mean_squared_error(Y2, Y2_plot))))
             Accuracy2 = r2_score(Y2, Y2_plot)
+            print ("RMSE Y2 : {}".format(math.sqrt(mean_squared_error(Y2, Y2_plot))))
             print ("Y2 Accuracy: {}".format(Accuracy2))
         print ("========================")
 
@@ -237,6 +239,9 @@ class Scheduler:
         proc_log_temp_f.daemon = True
         proc_log_temp_f.start()
         # print ("Start logging temperature in file")
+
+        # Delay extrapolate for 1 second to log temp_start
+        time.sleep(1)
 
         proc_extrapolate = Thread(target=self._extrapolate_realtime_)
         proc_extrapolate.daemon = True
