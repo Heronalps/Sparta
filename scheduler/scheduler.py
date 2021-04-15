@@ -107,9 +107,9 @@ class Scheduler:
             # Log the current max temp
             self.max_temp_log.append(max(self.temp_log_curr))
             # Perturb temperature delta to prevent duplicate data point 
-            log_temp_delta += random.uniform(0.001, 0.01)
+            log_temp_delta += random.uniform(1e-7, 1e-6)
             # Perturb the designated frequency to secure at least two data points for regression
-            self.freq -= random.uniform(0.001, 0.01)
+            self.freq -= random.uniform(1e-7, 1e-6)
 
             print ("TEMP DELTA : {} Freq : {}".format(log_temp_delta, self.freq))
             self.freq_log.append(self.freq)
@@ -183,6 +183,7 @@ class Scheduler:
         # print (self.model)
         
         # self.freq += 0.35
+        print ("Modifying freq : {}".format(self.freq))
         proc = Popen(['./cpu_scaling', '-u', str(self.freq) + 'GHz'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
         stdout, stderr = proc.communicate()
         # print (stdout.decode("utf-8"))
