@@ -8,19 +8,26 @@ from scipy.optimize import curve_fit
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
 
-
-df_t = pd.read_csv("./data/tensor-time-vs-max.csv")
-df_mio = pd.read_csv("./data/matmul_io.csv")
-df_mnist = pd.read_csv("./data/mnist.csv")
-
 # The number of seconds every regression and model calibration happens
 CALIBRATION_PERIOD = 15
 INCREMENT = 0.3
 X_HEADER = "max2"
 Y_HEADER = "Freq"
+# The resolution of addition in AIMD
+# 0.1 => 100MHz
+A_FACTOR = 0.05
+M_FACTOR = 0.5
+
+# The window size of sampling max temp in AIMD
+AIMD_WINDOW = 3
+
+df_t = pd.read_csv("./data/tensor-time-vs-max.csv")
+df_mio = pd.read_csv("./data/matmul_io.csv")
+df_mnist = pd.read_csv("./data/mnist.csv")
+
 
 class Scheduler:
-    def __init__(self, pkg_path=None, log_path=None, temp=None):
+    def __init__(self, pkg_path=None, log_path=None, temp=None, mode=1):
         
         self.temp_threshold = temp
         self.temp_start = None
@@ -28,6 +35,9 @@ class Scheduler:
         self.log_path = log_path
         self.model = None
         self.freq = None
+        
+        # Feature flag among [1=>Annealing, 2=>AIMD, 3=>Hybrid]
+        self.mode = mode
         
         # The initial freq from historical data extrapolation
         # This is used as the upper boundary of exploration
@@ -116,17 +126,18 @@ class Scheduler:
         stdout = stdout.decode("utf-8")
         match = re.search("Package\sid\s0:\s*\+([0-9]*\.[0-9])", stdout)
         temp = float(match.group(1))
-        # print ("Temp : ", temp)
+        
         if (match):
             self.temp_log_curr.append(temp)
-            # print (self.temp_log_curr)
+            self.temp_log_all.append(temp)
+            
             # Record the starting temperature
             if (self.temp_start is None):
                 self.temp_start = temp
 
         if (len(self.temp_log_curr) >= CALIBRATION_PERIOD):
-            self.temp_log_all.extend(self.temp_log_curr)
             log_temp_delta = np.log(max(self.temp_log_curr)) - np.log(self.temp_start)
+            
             # Log the current max temp
             self.max_temp_log.append(max(self.temp_log_curr))
             self.max_temp_log_cache.append(max(self.temp_log_curr))
@@ -246,16 +257,96 @@ class Scheduler:
            
         while(self.temp_start is None):
             time.sleep(0.5)
-        # print (self.model)
         
-        # self.freq += 0.35
+        self._modify_freq_()  
+   
+
+    def _aimd_realtime_(self):
+        
+        # Set up initial frequency
+        self._extrapolate_()
+        
+        while(True):
+            print ("Realtime Curr Temp Log : {}".format(self.temp_log_curr))
+            
+            # Capture conservative local minimum 
+            if len(self.temp_log_all) > AIMD_WINDOW * 5:
+                # All temps in window are 5 degrees below threshold
+                last_segment_temp_less = [t <= self.temp_threshold - 5 for t in self.temp_log_all[-AIMD_WINDOW * 5:]]
+                
+                if all(last_segment_temp_less):
+                    self._aimd_()
+            
+
+            # All temps in window are larger than threshold
+            last_segment_temp = [t > self.temp_threshold for t in self.temp_log_all[-AIMD_WINDOW:]]
+            
+            # Start AIMD mode if all temps in window are above threshold or all temps are 5 degrees below
+            if all(last_segment_temp):
+                self._aimd_()
+            
+            time.sleep(AIMD_WINDOW)
+
+
+    def _aimd_(self):
+        
+        print ("Start AIMD...")
+        start = time.time()
+
+        # Multiplicative Decrease
+        while (True):
+
+            print ("Temp log all : {}".format(self.temp_log_all[-AIMD_WINDOW * 2:]))            
+            last_segment_temp = [t > self.temp_threshold for t in self.temp_log_all[-AIMD_WINDOW * 2:]]
+            
+            if any(last_segment_temp): 
+                self.freq *= M_FACTOR
+                self._modify_freq_()    
+            
+            else:
+                break
+            
+            time.sleep(AIMD_WINDOW * 2)
+        
+
+        # Additive Increase
+        while (True):
+    
+            print ("AIMD Curr Temp Log : {}".format(self.temp_log_curr))
+
+            # All temps in window are within [threshold - 2, threshold] 
+            last_segment_temp = [t <= self.temp_threshold and t >= self.temp_threshold - 2 for t in self.temp_log_all[-AIMD_WINDOW:]]
+            last_segment_temp_greater = [t > self.temp_threshold for t in self.temp_log_all[-AIMD_WINDOW:]]            
+            
+            print ("Last Segment : {}".format(last_segment_temp))
+            print ("Last Segment Greater : {}".format(last_segment_temp_greater))
+
+            # Stop Additive Increase if all temps are in scope
+            if all(last_segment_temp):
+                print ("Stablize in {} seconds".format(time.time() - start))
+                break
+
+            if any(last_segment_temp_greater):
+                print ("Overkill")
+                break
+            
+            if not any(last_segment_temp):
+                self.freq += A_FACTOR
+                self._modify_freq_()
+
+            time.sleep(AIMD_WINDOW * 3)
+
+          
+    def _modify_freq_(self):
+        
         print ("Modifying freq : {}".format(self.freq))
         proc = Popen(['./cpu_scaling', '-u', str(self.freq) + 'GHz'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
         stdout, stderr = proc.communicate()
         # print (stdout.decode("utf-8"))
-        
-            
-           
+
+
+
+
     # Linear regression on the dfvs frequency by temperature threshold
     # a + b * [log(temp_target) - log(temp_start)] = Freq
     # Returns a regression model for extrapolation
@@ -310,11 +401,24 @@ class Scheduler:
 
         # Delay extrapolate for 1 second to log temp_start
         time.sleep(1)
-
-        proc_extrapolate = Thread(target=self._extrapolate_realtime_)
-        proc_extrapolate.daemon = True
-        proc_extrapolate.start()
-        # print ("Start Regression")
+       
+        # Annealing mode
+        if self.mode == 1:
+            proc_extrapolate = Thread(target=self._extrapolate_realtime_)
+            proc_extrapolate.daemon = True
+            proc_extrapolate.start()
+            # print ("Start Regression")
+       
+        # AIMD mode
+        elif self.mode == 2:
+            proc_AIMD = Thread(target=self._aimd_realtime_)
+            proc_AIMD.daemon = True
+            proc_AIMD.start()
+        
+        # Hybrid mode
+        else:
+            pass
+        
 
         '''
         # Delay the execution for 1  second to make sure the starting temp is recorded    
