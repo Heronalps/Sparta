@@ -9,9 +9,11 @@ def main():
     RMSD_max_temp = []
     RMSD_all_temp = []
 
+    s.run()
+    
     for t in range(100):
         print ("{} time(s) of execution".format(t + 1))
-        s.run()
+        s._execute_()
         print (repr(s))
         count = 0
         for i in s.temp_log_curr:
@@ -41,7 +43,7 @@ def main():
         print ("RMSD Max temp : {}".format(rmsd_max_temp))
         print ("RMSD All temp : {}".format(rmsd_all_temp))
         print ("Max Temp Log : {}".format(s.max_temp_log))
-        print ("Freq Log : {}".format(s.freq_log))
+        print ("Freq Log : {}".format(s.freq_set))
 
 
 if __name__ == "__main__":

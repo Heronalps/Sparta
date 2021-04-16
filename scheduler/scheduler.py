@@ -14,24 +14,39 @@ df_mio = pd.read_csv("./data/matmul_io.csv")
 df_mnist = pd.read_csv("./data/mnist.csv")
 
 # The number of seconds every regression and model calibration happens
-CALIBRATION_PERIOD = 30
-EPSILON = 0.5
+CALIBRATION_PERIOD = 15
+INCREMENT = 0.3
 X_HEADER = "max2"
 Y_HEADER = "Freq"
 
 class Scheduler:
     def __init__(self, pkg_path=None, log_path=None, temp=None):
+        
         self.temp_threshold = temp
         self.temp_start = None
         self.pkg_path = pkg_path
         self.log_path = log_path
         self.model = None
         self.freq = None
+        
+        # The initial freq from historical data extrapolation
+        # This is used as the upper boundary of exploration
+        self.freq_init = None
+        
         # Real time data log - max temperature & temp time series
         self.temp_log_curr = []
         self.temp_log_all = []
         self.max_temp_log = []
-        self.freq_log = []
+        self.max_temp_log_cache = []
+        self.freq_set = set()
+        
+        # The on/off flag for scheduler
+        self.flag = True
+
+        # Two variables for annealing
+        self.k = 1.0
+        self.epsilon = 1.0
+
         # Mapping max temperature => freq
         self.max_temp_freq_map = {}
 
@@ -42,6 +57,14 @@ class Scheduler:
             "py"  : "python" ,
             "out" : ""       , 
         }
+
+    def _reset_(self):
+        self.epsilon = 1.0
+        self.k = 1.0
+        self.max_temp_freq_map.clear()
+        self.freq_set.clear()
+        self.max_temp_log_cache.clear()
+
         
     def __repr__(self):
         return "======\nthreshold: {0} \ntemp_start : {1} \nmodel : {2} \nfreq : {3} \ntemp_log_all : {4} \n======\n ".format(
@@ -106,13 +129,17 @@ class Scheduler:
             log_temp_delta = np.log(max(self.temp_log_curr)) - np.log(self.temp_start)
             # Log the current max temp
             self.max_temp_log.append(max(self.temp_log_curr))
+            self.max_temp_log_cache.append(max(self.temp_log_curr))
+            
+            '''
             # Perturb temperature delta to prevent duplicate data point 
-            log_temp_delta += random.uniform(1e-7, 1e-6)
+            log_temp_delta -= random.uniform(1e-7, 1e-6)
             # Perturb the designated frequency to secure at least two data points for regression
             self.freq -= random.uniform(1e-7, 1e-6)
+            '''
 
-            print ("TEMP DELTA : {} Freq : {}".format(log_temp_delta, self.freq))
-            self.freq_log.append(self.freq)
+            # print ("TEMP DELTA : {} Freq : {}".format(log_temp_delta, self.freq))
+            self.freq_set.add(self.freq)
             self.max_temp_freq_map[log_temp_delta] = self.freq
             self.temp_log_curr.clear()
         
@@ -126,8 +153,8 @@ class Scheduler:
 
 
     def retrieve_data_from_dataframe(self, df_benchmark, df_target, header1, header2):
-        #X = [log(temp_target) - log(start_temp)]
-        #Y = Freq
+        # X = [log(temp_target) - log(start_temp)]
+        # Y = Freq
         X1 = np.log(df_benchmark[header2]) - np.log(df_benchmark[header2][0])
         Y1 = df_benchmark[header1] 
 
@@ -143,39 +170,78 @@ class Scheduler:
         return X1, Y1
 
 
-    def _extrapolate_realtime_(self): 
+    def _extrapolate_realtime_(self):
+        start = time.time()
         while(True):
-            self._extrapolate_()
+            if (len(self.max_temp_log) >= 3):
+                last_three_temp = [t > self.temp_threshold + 1 or t < self.temp_threshold - 2 for t in self.max_temp_log[-3:]]
+                
+                # If any last three temps are out of scope of [threshold - 2, threshold]
+                if any(last_three_temp):
+                   
+                    # reset Threshold and self.k for Annealing
+                    if not self.flag:
+                        self.flag = True
+                        self.epsilon = 1.0
+                        self.k = 1.0
+                        print ("======Scheduler Wakes up=======")
+                        print () 
+                
+                # Scheduler goes to hibernate until anomaly detected
+                else:
+                    if self.flag:
+                        print ("******Stablized in {} seconds*******".format(time.time() - start))
+                        print ("======Hibernate Scheduler=======")
+                        print ()
+                        self.flag = False
+            
+            # If all last ten temps are out of scope, we assume it stuck at local minimum
+            if (len(self.max_temp_log_cache) >= 10):
+                last_ten_temp = [t > self.temp_threshold or t < self.temp_threshold - 2 for t in self.max_temp_log_cache[-10:]]
+                
+                # Reset scheudler
+                if all(last_ten_temp):
+                    self._reset_()            
+
+            if (self.flag):
+                self._extrapolate_()
+                self.k += INCREMENT
+
             if self.stop_threads:
                 break
-            # Rebuild regression model every 60 seconds on two new data points 
-            time.sleep(CALIBRATION_PERIOD * 2)
+            
+            # Rebuild regression model every 15 seconds on two new data points 
+            time.sleep(CALIBRATION_PERIOD)
 
 
     # Regress against logged data
     # Update self.freq based on temperature threshold
     # Adjust CPU performance given the self.freq
     def _extrapolate_(self):
-        times = 1
         log_temp_delta = [[np.log(self.temp_threshold) - np.log(self.temp_start)]]
         p = np.random.random()
-        threshold = EPSILON/times
+        threshold = self.epsilon / self.k
+        print ("P : {} Threshold : {}".format(p, threshold))
+        if p < threshold and self.freq_init is not None:
+            # To guarantee the new freq would not lead to a excessive temperature over threshold
+            # The recorded log is still good to extrapolate (not intrapolate) the regression
+            self.freq = random.uniform(0.8, self.freq_init)
+       
+
         # Regression based on historical data, which is guaranteed in first few extrapolations
-        if len(self.max_temp_freq_map) <= 2:
+        elif len(self.freq_set) < 2:
             X1, X2, Y1, Y2 = self.retrieve_data_from_dataframe(df_mio, df_t, Y_HEADER, X_HEADER)
             self.model = self._log_regress_(X1, Y1, X2, Y2)
             self.freq = self.model.predict(log_temp_delta)[0]
-        elif p < threshold:
-            # To guarantee the new freq would not lead to a excessive temperature over threshold
-            # The recorded log is still good to extrapolate (not intrapolate) the regression
-            self.freq = random.uniform(0.8, self.freq)
+            if self.freq_init is None:
+                self.freq_init = self.freq
+        
            
         # Build regression model based on real time data if it has at least two data points
         else:
             X1, Y1 = self.retrieve_data_from_map()
             self.model = self._log_regress_(X1, Y1)    
             self.freq = self.model.predict(log_temp_delta)[0]
-        times += 1
 
            
         while(self.temp_start is None):
@@ -188,8 +254,6 @@ class Scheduler:
         stdout, stderr = proc.communicate()
         # print (stdout.decode("utf-8"))
         
-        # Rebuild regression model every 60 seconds on two new data points 
-        time.sleep(CALIBRATION_PERIOD * 2)
             
            
     # Linear regression on the dfvs frequency by temperature threshold
@@ -252,6 +316,7 @@ class Scheduler:
         proc_extrapolate.start()
         # print ("Start Regression")
 
+        '''
         # Delay the execution for 1  second to make sure the starting temp is recorded    
         time.sleep(1)
 
@@ -259,6 +324,7 @@ class Scheduler:
         proc_exec.start()
 
         # Terminate temp monitor when execution finishes
+        
         if (proc_exec.join() is None):
             self.stop_threads = True
             proc_log_temp_rt.join()
@@ -267,3 +333,4 @@ class Scheduler:
 
         
         time.sleep(1)
+        '''
