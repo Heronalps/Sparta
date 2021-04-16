@@ -6,9 +6,9 @@ from tensorflow.keras.preprocessing import image
 from tensorflow.keras.models import load_model
 import os
 
-CURR_DIR = "WTB_Images_03152021"
+CURR_DIR = "WTB_Images"
 CLASSES = ("Bear", "Coyote", "Deer", "Other", "Empty")
-MODEL_DIR = "./checkpoints/imagenet.h5"
+MODEL_DIR = "../checkpoints/resnet50_model.h5"
 
 # Set PRETRAIN_MODEL true if we want to train a new model from scratch
 PRETRAIN_MODEL = False
