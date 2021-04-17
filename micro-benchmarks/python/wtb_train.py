@@ -16,7 +16,7 @@ IMAGE_SIZE = (1920, 1080)
 INPUT_SHAPE = IMAGE_SIZE + (3,)
 BATCH_SIZE = 32
 NUM_CLASS = 5
-EPOCHS = 1
+EPOCHS = 20
 
 def build_model(input_shape=(1920, 1080, 3), num_class=5):
     input_t = keras.Input(shape=input_shape)

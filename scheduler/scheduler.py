@@ -9,17 +9,28 @@ from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
 
 # The number of seconds every regression and model calibration happens
-CALIBRATION_PERIOD = 15
-INCREMENT = 0.3
+CALIBRATION_PERIOD = 5
+
+# K Increment after every run
+INCREMENT = 0.5
+
+# Regression dataset headers
 X_HEADER = "max2"
 Y_HEADER = "Freq"
+
 # The resolution of addition in AIMD
 # 0.1 => 100MHz
-A_FACTOR = 0.05
-M_FACTOR = 0.5
+A_FACTOR = 0.07
+M_FACTOR = 0.7
 
 # The window size of sampling max temp in AIMD
-AIMD_WINDOW = 3
+WINDOW_SIZE = 4
+
+# The left boundary of acceptable temperature
+LEFT_BOUND = 5
+
+# Time stamp of start
+START = time.time()
 
 df_t = pd.read_csv("./data/tensor-time-vs-max.csv")
 df_mio = pd.read_csv("./data/matmul_io.csv")
@@ -182,13 +193,15 @@ class Scheduler:
 
 
     def _extrapolate_realtime_(self):
-        start = time.time()
         while(True):
-            if (len(self.max_temp_log) >= 3):
-                last_three_temp = [t > self.temp_threshold + 1 or t < self.temp_threshold - 2 for t in self.max_temp_log[-3:]]
-                
+            print ("Max temp log : {}".format(self.max_temp_log))
+            print ("All temp log : {}".format(self.temp_log_all))
+            if (len(self.temp_log_all) >= WINDOW_SIZE):
+                last_segment_temp = [t > self.temp_threshold or t < self.temp_threshold - LEFT_BOUND for t in self.temp_log_all[-WINDOW_SIZE:]]
+                print ("Last three temp : {}".format(last_segment_temp))
+
                 # If any last three temps are out of scope of [threshold - 2, threshold]
-                if any(last_three_temp):
+                if all(last_segment_temp):
                    
                     # reset Threshold and self.k for Annealing
                     if not self.flag:
@@ -201,14 +214,14 @@ class Scheduler:
                 # Scheduler goes to hibernate until anomaly detected
                 else:
                     if self.flag:
-                        print ("******Stablized in {} seconds*******".format(time.time() - start))
+                        print ("******Stablized in {} seconds*******".format(time.time() - START))
                         print ("======Hibernate Scheduler=======")
                         print ()
                         self.flag = False
             
             # If all last ten temps are out of scope, we assume it stuck at local minimum
             if (len(self.max_temp_log_cache) >= 10):
-                last_ten_temp = [t > self.temp_threshold or t < self.temp_threshold - 2 for t in self.max_temp_log_cache[-10:]]
+                last_ten_temp = [t > self.temp_threshold or t < self.temp_threshold - LEFT_BOUND for t in self.max_temp_log_cache[-10:]]
                 
                 # Reset scheudler
                 if all(last_ten_temp):
@@ -221,7 +234,7 @@ class Scheduler:
             if self.stop_threads:
                 break
             
-            # Rebuild regression model every 15 seconds on two new data points 
+            # Rebuild regression model every a few seconds on new data points 
             time.sleep(CALIBRATION_PERIOD)
 
 
@@ -240,7 +253,7 @@ class Scheduler:
        
 
         # Regression based on historical data, which is guaranteed in first few extrapolations
-        elif len(self.freq_set) < 2:
+        elif len(self.freq_set) < 3:
             X1, X2, Y1, Y2 = self.retrieve_data_from_dataframe(df_mio, df_t, Y_HEADER, X_HEADER)
             self.model = self._log_regress_(X1, Y1, X2, Y2)
             self.freq = self.model.predict(log_temp_delta)[0]
@@ -252,8 +265,9 @@ class Scheduler:
         else:
             X1, Y1 = self.retrieve_data_from_map()
             self.model = self._log_regress_(X1, Y1)    
-            self.freq = self.model.predict(log_temp_delta)[0]
-
+            freq = self.model.predict(log_temp_delta)[0]
+            if (freq >= 0.8 and freq <= 3.5):
+                self.freq = freq
            
         while(self.temp_start is None):
             time.sleep(0.5)
@@ -267,37 +281,36 @@ class Scheduler:
         self._extrapolate_()
         
         while(True):
-            print ("Realtime Curr Temp Log : {}".format(self.temp_log_curr))
+            print ("Realtime Curr Temp Log : {}".format(self.temp_log_all))
             
             # Capture conservative local minimum 
-            if len(self.temp_log_all) > AIMD_WINDOW * 5:
+            if len(self.temp_log_all) > WINDOW_SIZE * LEFT_BOUND:
                 # All temps in window are 5 degrees below threshold
-                last_segment_temp_less = [t <= self.temp_threshold - 5 for t in self.temp_log_all[-AIMD_WINDOW * 5:]]
+                last_segment_temp_less = [t <= self.temp_threshold - LEFT_BOUND for t in self.temp_log_all[-WINDOW_SIZE * LEFT_BOUND:]]
                 
                 if all(last_segment_temp_less):
                     self._aimd_()
             
 
             # All temps in window are larger than threshold
-            last_segment_temp = [t > self.temp_threshold for t in self.temp_log_all[-AIMD_WINDOW:]]
+            last_segment_temp = [t > self.temp_threshold for t in self.temp_log_all[-WINDOW_SIZE:]]
             
             # Start AIMD mode if all temps in window are above threshold or all temps are 5 degrees below
             if all(last_segment_temp):
                 self._aimd_()
             
-            time.sleep(AIMD_WINDOW)
+            time.sleep(WINDOW_SIZE)
 
 
     def _aimd_(self):
         
         print ("Start AIMD...")
-        start = time.time()
 
         # Multiplicative Decrease
         while (True):
 
-            print ("Temp log all : {}".format(self.temp_log_all[-AIMD_WINDOW * 2:]))            
-            last_segment_temp = [t > self.temp_threshold for t in self.temp_log_all[-AIMD_WINDOW * 2:]]
+            print ("Temp log all : {}".format(self.temp_log_all[-WINDOW_SIZE * 2:]))            
+            last_segment_temp = [t > self.temp_threshold for t in self.temp_log_all[-WINDOW_SIZE * 2:]]
             
             if any(last_segment_temp): 
                 self.freq *= M_FACTOR
@@ -306,7 +319,7 @@ class Scheduler:
             else:
                 break
             
-            time.sleep(AIMD_WINDOW * 2)
+            time.sleep(WINDOW_SIZE * 2)
         
 
         # Additive Increase
@@ -314,27 +327,29 @@ class Scheduler:
     
             print ("AIMD Curr Temp Log : {}".format(self.temp_log_curr))
 
-            # All temps in window are within [threshold - 2, threshold] 
-            last_segment_temp = [t <= self.temp_threshold and t >= self.temp_threshold - 2 for t in self.temp_log_all[-AIMD_WINDOW:]]
-            last_segment_temp_greater = [t > self.temp_threshold for t in self.temp_log_all[-AIMD_WINDOW:]]            
+            # All temps in window are within [threshold - LEFT_BOUND, threshold] 
+            last_segment_temp = [t <= self.temp_threshold and t >= self.temp_threshold - LEFT_BOUND for t in self.temp_log_all[-WINDOW_SIZE:]]
+            last_segment_temp_greater = [t > self.temp_threshold for t in self.temp_log_all[-WINDOW_SIZE:]]            
             
-            print ("Last Segment : {}".format(last_segment_temp))
+            print ("Last Segment in scope: {}".format(last_segment_temp))
             print ("Last Segment Greater : {}".format(last_segment_temp_greater))
 
             # Stop Additive Increase if all temps are in scope
             if all(last_segment_temp):
-                print ("Stablize in {} seconds".format(time.time() - start))
+                print ("======Stablize in {} seconds======".format(time.time() - START))
                 break
 
             if any(last_segment_temp_greater):
                 print ("Overkill")
                 break
             
+            # Additive increase when no temps are in the scope
+            # This is a strategy to prevent overkill
             if not any(last_segment_temp):
                 self.freq += A_FACTOR
                 self._modify_freq_()
 
-            time.sleep(AIMD_WINDOW * 3)
+            time.sleep(WINDOW_SIZE)
 
           
     def _modify_freq_(self):

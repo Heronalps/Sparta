@@ -7,7 +7,8 @@ FEATURE_FLAG = {"Annealing": 1, "AIMD": 2, "Hybrid":3}
 MODE = "AIMD"
 
 def main():
-    s = Scheduler("../micro-benchmarks/python/Image_cls.py", "temp_log_path", 75.0, FEATURE_FLAG[MODE])
+    # s = Scheduler("../micro-benchmarks/python/Image_cls.py", "temp_log_path", 75.0, FEATURE_FLAG[MODE])
+    s = Scheduler("../micro-benchmarks/python/wtb_train.py", "temp_log_path", 75.0, FEATURE_FLAG[MODE])
     percent_below_threshold = []
     percent_on_target = []
     RMSD_max_temp = []
