@@ -40,6 +40,9 @@ df_mnist = pd.read_csv("./data/mnist.csv")
 class Scheduler:
     def __init__(self, pkg_path=None, log_path=None, temp=None, mode=1):
         
+        # Thread lock for hybrid mode
+        self.lock = threading.Lock()
+
         self.temp_threshold = temp
         self.temp_start = None
         self.pkg_path = pkg_path
@@ -193,14 +196,24 @@ class Scheduler:
 
 
     def _extrapolate_realtime_(self):
+        self.lock.acquire()
+
         while(True):
             print ("Max temp log : {}".format(self.max_temp_log))
             print ("All temp log : {}".format(self.temp_log_all))
             if (len(self.temp_log_all) >= WINDOW_SIZE):
-                last_segment_temp = [t > self.temp_threshold or t < self.temp_threshold - LEFT_BOUND for t in self.temp_log_all[-WINDOW_SIZE:]]
-                print ("Last three temp : {}".format(last_segment_temp))
 
-                # If any last three temps are out of scope of [threshold - 2, threshold]
+                last_segment_temp_greater = [t > self.temp_threshold for t in self.temp_log_all[-WINDOW_SIZE:]]
+                print ("Last segment temp greater: {}".format(last_segment_temp_greater))
+
+                if any(last_segment_temp_greater):
+                    self.lock.release()
+                    print ("Release the lock to AIMD...")
+
+                last_segment_temp = [t > self.temp_threshold or t < self.temp_threshold - LEFT_BOUND for t in self.temp_log_all[-WINDOW_SIZE:]]
+                print ("Last segment temp : {}".format(last_segment_temp))
+
+                # If any last segment temps are out of scope of [threshold - 2, threshold]
                 if all(last_segment_temp):
                    
                     # reset Threshold and self.k for Annealing
@@ -276,9 +289,12 @@ class Scheduler:
    
 
     def _aimd_realtime_(self):
-        
+        # Acquire thread lock when Annealing releases
+        self.lock.acquire()
+
         # Set up initial frequency
-        self._extrapolate_()
+        if self.temp_start == None:
+            self._extrapolate_()
         
         while(True):
             print ("Realtime Curr Temp Log : {}".format(self.temp_log_all))
@@ -337,6 +353,10 @@ class Scheduler:
             # Stop Additive Increase if all temps are in scope
             if all(last_segment_temp):
                 print ("======Stablize in {} seconds======".format(time.time() - START))
+                
+                self.lock.release()
+                print ("Release the lock when AIMD stablizes...")
+
                 break
 
             if any(last_segment_temp_greater):
@@ -422,7 +442,6 @@ class Scheduler:
             proc_extrapolate = Thread(target=self._extrapolate_realtime_)
             proc_extrapolate.daemon = True
             proc_extrapolate.start()
-            # print ("Start Regression")
        
         # AIMD mode
         elif self.mode == 2:
@@ -432,7 +451,13 @@ class Scheduler:
         
         # Hybrid mode
         else:
-            pass
+            proc_extrapolate = Thread(target=self._extrapolate_realtime_)
+            proc_extrapolate.daemon = True
+            proc_extrapolate.start()
+
+            proc_AIMD = Thread(target=self._aimd_realtime_)
+            proc_AIMD.daemon = True
+            proc_AIMD.start()
         
 
         '''
