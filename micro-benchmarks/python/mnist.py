@@ -53,7 +53,7 @@ model.summary()
 """
 
 batch_size = 64
-epochs = 2
+epochs = 20
 
 ts_before = time.time()
 

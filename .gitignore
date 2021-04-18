@@ -1,5 +1,6 @@
 .DS_store
 /venv/**
+**/log/**
 **/WTB_Images/**
 **/.ipynb_checkpoints
 **/.vscode/**
