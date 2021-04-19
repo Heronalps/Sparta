@@ -1,4 +1,4 @@
-import re, time, math, random
+import re, time, math, random, threading
 import numpy as np
 import pandas as pd
 from subprocess import Popen, PIPE
@@ -36,12 +36,20 @@ df_t = pd.read_csv("./data/tensor-time-vs-max.csv")
 df_mio = pd.read_csv("./data/matmul_io.csv")
 df_mnist = pd.read_csv("./data/mnist.csv")
 
+# Thread lock for hybrid mode
+LOCK = threading.Lock()
+        
 
 class Scheduler:
-    def __init__(self, pkg_path=None, log_path=None, temp=None, mode=1):
+    def __init__(self, pkg_path=None, log_path=None, temp=None, mode=1):    
         
-        # Thread lock for hybrid mode
-        self.lock = threading.Lock()
+        self.threads = {}
+        
+        # The thread flag indicating either annealing or AIMD is running
+        # 1 => Annealing & AIMD Entrance => (Annealing, AIMD) acquire lock 
+        # 2 => Annealing While Iteration => (AIMD) acquire lock
+        # 3 => AIMD While Iteration => (Annealing) acquire lock 
+        self.thread_flag = 1
 
         self.temp_threshold = temp
         self.temp_start = None
@@ -196,9 +204,13 @@ class Scheduler:
 
 
     def _extrapolate_realtime_(self):
-        self.lock.acquire()
-
+        global LOCK
+        
         while(True):
+            if self.mode == 3 and self.thread_flag != 2:
+                LOCK.acquire()
+                self.thread_flag = 2
+
             print ("Max temp log : {}".format(self.max_temp_log))
             print ("All temp log : {}".format(self.temp_log_all))
             if (len(self.temp_log_all) >= WINDOW_SIZE):
@@ -206,9 +218,18 @@ class Scheduler:
                 last_segment_temp_greater = [t > self.temp_threshold for t in self.temp_log_all[-WINDOW_SIZE:]]
                 print ("Last segment temp greater: {}".format(last_segment_temp_greater))
 
-                if any(last_segment_temp_greater):
-                    self.lock.release()
-                    print ("Release the lock to AIMD...")
+                if self.mode == 3 and any(last_segment_temp_greater):
+                    
+                    # Change thread flag to AIMD
+                    self.thread_flag = 1
+                    
+                    LOCK.release()
+                    print ("Release the lock to AIMD...{}".format(LOCK.locked()))
+                    
+                    # Sleep to let AIMD thread pick up lock
+                    time.sleep(5)
+                    
+                    continue
 
                 last_segment_temp = [t > self.temp_threshold or t < self.temp_threshold - LEFT_BOUND for t in self.temp_log_all[-WINDOW_SIZE:]]
                 print ("Last segment temp : {}".format(last_segment_temp))
@@ -227,11 +248,11 @@ class Scheduler:
                 # Scheduler goes to hibernate until anomaly detected
                 else:
                     if self.flag:
-                        print ("******Stablized in {} seconds*******".format(time.time() - START))
-                        print ("======Hibernate Scheduler=======")
+                        print ("******Annealing stablized in {} seconds*******".format(time.time() - START))
                         print ()
                         self.flag = False
             
+
             # If all last ten temps are out of scope, we assume it stuck at local minimum
             if (len(self.max_temp_log_cache) >= 10):
                 last_ten_temp = [t > self.temp_threshold or t < self.temp_threshold - LEFT_BOUND for t in self.max_temp_log_cache[-10:]]
@@ -247,8 +268,10 @@ class Scheduler:
             if self.stop_threads:
                 break
             
+           
             # Rebuild regression model every a few seconds on new data points 
             time.sleep(CALIBRATION_PERIOD)
+            
 
 
     # Regress against logged data
@@ -258,8 +281,8 @@ class Scheduler:
         log_temp_delta = [[np.log(self.temp_threshold) - np.log(self.temp_start)]]
         p = np.random.random()
         threshold = self.epsilon / self.k
-        print ("P : {} Threshold : {}".format(p, threshold))
         if p < threshold and self.freq_init is not None:
+            print ("P : {} Threshold : {}".format(p, threshold))
             # To guarantee the new freq would not lead to a excessive temperature over threshold
             # The recorded log is still good to extrapolate (not intrapolate) the regression
             self.freq = random.uniform(0.8, self.freq_init)
@@ -289,14 +312,20 @@ class Scheduler:
    
 
     def _aimd_realtime_(self):
-        # Acquire thread lock when Annealing releases
-        self.lock.acquire()
 
         # Set up initial frequency
-        if self.temp_start == None:
+        if self.freq == None:
             self._extrapolate_()
         
+        global LOCK
+        
         while(True):
+            if self.mode == 3 and self.thread_flag != 3: 
+                # Acquire thread lock when Annealing releases
+                LOCK.acquire()
+                self.thread_flag = 3
+
+            
             print ("Realtime Curr Temp Log : {}".format(self.temp_log_all))
             
             # Capture conservative local minimum 
@@ -306,20 +335,41 @@ class Scheduler:
                 
                 if all(last_segment_temp_less):
                     self._aimd_()
-            
+                    if self.mode == 3:
+                        self.thread_flag = 1
+                        LOCK.release()
+                        time.sleep(1)
+                    continue
 
             # All temps in window are larger than threshold
             last_segment_temp = [t > self.temp_threshold for t in self.temp_log_all[-WINDOW_SIZE:]]
             
-            # Start AIMD mode if all temps in window are above threshold or all temps are 5 degrees below
+            # Start AIMD mode if all temps in window are above threshold
             if all(last_segment_temp):
                 self._aimd_()
-            
+                if self.mode == 3:
+                    self.thread_flag = 1
+                    LOCK.release()
+                    time.sleep(1)
+                continue
+
+            # All temps in window are larger than threshold by 5 degrees
+            last_segment_temp_greater = [t >= self.temp_threshold + 5 for t in self.temp_log_all[-WINDOW_SIZE:]]
+
+            # Start AIMD mode if any temps in window are above threshold + 5 
+            if any(last_segment_temp_greater):
+                self._aimd_()
+                if self.mode == 3:
+                    self.thread_flag = 1
+                    LOCK.release()
+                    time.sleep(1)
+                continue
+
             time.sleep(WINDOW_SIZE)
 
 
     def _aimd_(self):
-        
+       
         print ("Start AIMD...")
 
         # Multiplicative Decrease
@@ -352,16 +402,20 @@ class Scheduler:
 
             # Stop Additive Increase if all temps are in scope
             if all(last_segment_temp):
-                print ("======Stablize in {} seconds======".format(time.time() - START))
-                
-                self.lock.release()
-                print ("Release the lock when AIMD stablizes...")
+                print ("======AIMD Stablize in {} seconds======".format(time.time() - START))
+                                
+                # Change thread flag to Annealing
+                self.thread_flag = 1
+
+                time.sleep(1)
 
                 break
 
-            if any(last_segment_temp_greater):
+            if all(last_segment_temp_greater):
                 print ("Overkill")
-                break
+                self.freq *= M_FACTOR
+                self._modify_freq_()
+                continue
             
             # Additive increase when no temps are in the scope
             # This is a strategy to prevent overkill
@@ -371,15 +425,13 @@ class Scheduler:
 
             time.sleep(WINDOW_SIZE)
 
-          
+
     def _modify_freq_(self):
         
         print ("Modifying freq : {}".format(self.freq))
         proc = Popen(['./cpu_scaling', '-u', str(self.freq) + 'GHz'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
         stdout, stderr = proc.communicate()
         # print (stdout.decode("utf-8"))
-
-
 
 
     # Linear regression on the dfvs frequency by temperature threshold
@@ -439,26 +491,27 @@ class Scheduler:
        
         # Annealing mode
         if self.mode == 1:
-            proc_extrapolate = Thread(target=self._extrapolate_realtime_)
-            proc_extrapolate.daemon = True
-            proc_extrapolate.start()
+            thread_annealing = Thread(target=self._extrapolate_realtime_)
+            thread_annealing.daemon = True
+            thread_annealing.start()
        
         # AIMD mode
         elif self.mode == 2:
-            proc_AIMD = Thread(target=self._aimd_realtime_)
-            proc_AIMD.daemon = True
-            proc_AIMD.start()
+            thread_AIMD = Thread(target=self._aimd_realtime_)
+            thread_AIMD.daemon = True
+            thread_AIMD.start()
         
         # Hybrid mode
         else:
-            proc_extrapolate = Thread(target=self._extrapolate_realtime_)
-            proc_extrapolate.daemon = True
-            proc_extrapolate.start()
+            thread_annealing = Thread(target=self._extrapolate_realtime_)
+            self.threads["annealing"] = thread_annealing
+            
+            thread_AIMD = Thread(target=self._aimd_realtime_)
+            self.threads["aimd"] = thread_AIMD
+            
+            thread_annealing.start()
+            thread_AIMD.start()
 
-            proc_AIMD = Thread(target=self._aimd_realtime_)
-            proc_AIMD.daemon = True
-            proc_AIMD.start()
-        
 
         '''
         # Delay the execution for 1  second to make sure the starting temp is recorded    

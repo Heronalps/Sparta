@@ -1,15 +1,17 @@
-import time
+import time, threading
 from scheduler import Scheduler
 import numpy as np
 
 FEATURE_FLAG = {"Annealing": 1, "AIMD": 2, "Hybrid":3}
 # MODE = "Annealing"
 MODE = "AIMD"
+# MODE = "Hybrid"
+
 
 def main():
     # s = Scheduler("../micro-benchmarks/python/Image_cls.py", "temp_log_path", 75.0, FEATURE_FLAG[MODE]) 
-    # s = Scheduler("../micro-benchmarks/python/wtb_train.py", "temp_log_path", 75.0, FEATURE_FLAG[MODE])
-    s = Scheduler("../micro-benchmarks/python/mnist.py", "temp_log_path", 75.0, FEATURE_FLAG[MODE])
+    s = Scheduler("../micro-benchmarks/python/wtb_train.py", "temp_log_path", 75.0, FEATURE_FLAG[MODE])
+    # s = Scheduler("../micro-benchmarks/python/mnist.py", "temp_log_path", 75.0, FEATURE_FLAG[MODE])
     percent_below_threshold = []
     percent_on_target = []
     RMSD_max_temp = []

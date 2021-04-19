@@ -1,3 +1,3 @@
 #!/bin/bash
 
-python main.py | tee -a ./log/AIMD_N_mnist_041721.log
+python main.py | tee -a ./log/Hybrid_N_wtb_train_041821.log
