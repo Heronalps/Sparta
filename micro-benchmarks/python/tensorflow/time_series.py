@@ -71,7 +71,7 @@ past = 720
 future = 72
 learning_rate = 0.001
 batch_size = 256
-epochs = 10
+epochs = 1
 
 
 def normalize(data, train_split):

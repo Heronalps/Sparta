@@ -25,4 +25,4 @@ x_train = keras.preprocessing.sequence.pad_sequences(x_train, maxlen=maxlen)
 x_val = keras.preprocessing.sequence.pad_sequences(x_val, maxlen=maxlen)
 
 model.compile("adam", "binary_crossentropy", metrics=["accuracy"])
-model.fit(x_train, y_train, batch_size=32, epochs=2, validation_data=(x_val, y_val))
+model.fit(x_train, y_train, batch_size=32, epochs=1, validation_data=(x_val, y_val))

@@ -43,8 +43,6 @@ LOCK = threading.Lock()
 class Scheduler:
     def __init__(self, pkg_path=None, log_path=None, temp=None, mode=1):    
         
-        self.threads = {}
-        
         # The thread flag indicating either annealing or AIMD is running
         # 1 => Annealing & AIMD Entrance => (Annealing, AIMD) acquire lock 
         # 2 => Annealing While Iteration => (AIMD) acquire lock
@@ -72,7 +70,7 @@ class Scheduler:
         self.max_temp_log_cache = []
         self.freq_set = set()
         
-        # The on/off flag for scheduler
+        # The on/off flag for scheduler 
         self.flag = True
 
         # Two variables for annealing
@@ -91,11 +89,12 @@ class Scheduler:
         }
 
     def _reset_(self):
+        self.flag = True
         self.epsilon = 1.0
         self.k = 1.0
-        self.max_temp_freq_map.clear()
-        self.freq_set.clear()
-        self.max_temp_log_cache.clear()
+        # self.max_temp_freq_map.clear()
+        # self.freq_set.clear()
+        # self.max_temp_log_cache.clear()
 
         
     def __repr__(self):
@@ -122,10 +121,9 @@ class Scheduler:
         print ("exec starting")
         # shell=True executes commands through bash shell
         cmd = self.exec[suffix] + ' ' + filename
-        # print (cmd)
         proc = Popen([cmd], shell=True, cwd=path.encode('unicode_escape'), stdout=PIPE, stderr=PIPE)
         stdout, stderr = proc.communicate()
-        print (stdout.decode("utf-8"))
+        # print (stdout.decode("utf-8"))
         print ("exec ending")
            
 
@@ -141,7 +139,6 @@ class Scheduler:
 
     # Log temperature during execution to optimize the existing model
     def _log_temp_(self): 
-        # print ("_log_temp_ started")
         # Read temperature of current execution
         proc = Popen(["sensors"], stdout=PIPE, stderr=PIPE)
         stdout, stderr = proc.communicate()
@@ -171,16 +168,14 @@ class Scheduler:
             self.freq -= random.uniform(1e-7, 1e-6)
             '''
 
-            # print ("TEMP DELTA : {} Freq : {}".format(log_temp_delta, self.freq))
             self.freq_set.add(self.freq)
             self.max_temp_freq_map[log_temp_delta] = self.freq
-            self.temp_log_curr.clear()
-        
+            self.temp_log_curr.clear()  
+            # print ("TEMP DELTA: {} Freq : {}".format(self.max_temp_freq_map.keys(), self.max_temp_freq_map.values()))
        
         
     # Log temperature in the file system
     def _log_temp_file_(self):
-        # print ("Logging temp in file")
         proc = Popen(['exec', 'bash', 'record_temp.sh', self.log_path], stdout=PIPE, stderr=PIPE, shell=True)
         proc.communicate()
 
@@ -215,38 +210,38 @@ class Scheduler:
             print ("All temp log : {}".format(self.temp_log_all))
             if (len(self.temp_log_all) >= WINDOW_SIZE):
 
-                last_segment_temp_greater = [t > self.temp_threshold for t in self.temp_log_all[-WINDOW_SIZE:]]
-                print ("Last segment temp greater: {}".format(last_segment_temp_greater))
+                last_segment_temp_greater = [t > self.temp_threshold + 1 for t in self.temp_log_all[-WINDOW_SIZE:]]
+                # print ("Last segment temp greater: {}".format(last_segment_temp_greater))
 
-                if self.mode == 3 and any(last_segment_temp_greater):
+                if self.mode == 3 and all(last_segment_temp_greater):
                     
                     # Change thread flag to AIMD
                     self.thread_flag = 1
                     
                     LOCK.release()
-                    print ("Release the lock to AIMD...{}".format(LOCK.locked()))
                     
                     # Sleep to let AIMD thread pick up lock
                     time.sleep(5)
                     
                     continue
 
-                last_segment_temp = [t > self.temp_threshold or t < self.temp_threshold - LEFT_BOUND for t in self.temp_log_all[-WINDOW_SIZE:]]
-                print ("Last segment temp : {}".format(last_segment_temp))
+                last_segment_temp = [t > self.temp_threshold or t < self.temp_threshold - LEFT_BOUND for t in self.temp_log_all[-WINDOW_SIZE*2:]]
+                # print ("Last segment temp : {}".format(last_segment_temp))
 
-                # If any last segment temps are out of scope of [threshold - 2, threshold]
+                # If any last segment temps are out of scope of [threshold - LEFT_BOUND, threshold]
                 if all(last_segment_temp):
                    
                     # reset Threshold and self.k for Annealing
                     if not self.flag:
-                        self.flag = True
-                        self.epsilon = 1.0
-                        self.k = 1.0
+                        self._reset_()
                         print ("======Scheduler Wakes up=======")
                         print () 
+                # All temps are in the scope
+                # if not any(last_segment_temp):
                 
-                # Scheduler goes to hibernate until anomaly detected
+                # Any one in the scope
                 else:
+                    # Scheduler goes to hibernate until anomaly detected
                     if self.flag:
                         print ("******Annealing stablized in {} seconds*******".format(time.time() - START))
                         print ()
@@ -254,9 +249,9 @@ class Scheduler:
             
 
             # If all last ten temps are out of scope, we assume it stuck at local minimum
-            if (len(self.max_temp_log_cache) >= 10):
-                last_ten_temp = [t > self.temp_threshold or t < self.temp_threshold - LEFT_BOUND for t in self.max_temp_log_cache[-10:]]
-                
+            if (len(self.temp_log_all) >= WINDOW_SIZE * 3):
+                last_ten_temp = [t < self.temp_threshold - LEFT_BOUND for t in self.temp_log_all[-WINDOW_SIZE*3:]]
+                # print ("Last Ten Temp : {}".format(last_ten_temp)) 
                 # Reset scheudler
                 if all(last_ten_temp):
                     self._reset_()            
@@ -286,10 +281,10 @@ class Scheduler:
             # To guarantee the new freq would not lead to a excessive temperature over threshold
             # The recorded log is still good to extrapolate (not intrapolate) the regression
             self.freq = random.uniform(0.8, self.freq_init)
-       
+            # self.freq = random.uniform(0.8, 3.5)
 
         # Regression based on historical data, which is guaranteed in first few extrapolations
-        elif len(self.freq_set) < 3:
+        elif len(self.max_temp_freq_map) < 3:
             X1, X2, Y1, Y2 = self.retrieve_data_from_dataframe(df_mio, df_t, Y_HEADER, X_HEADER)
             self.model = self._log_regress_(X1, Y1, X2, Y2)
             self.freq = self.model.predict(log_temp_delta)[0]
@@ -331,7 +326,7 @@ class Scheduler:
             # Capture conservative local minimum 
             if len(self.temp_log_all) > WINDOW_SIZE * LEFT_BOUND:
                 # All temps in window are 5 degrees below threshold
-                last_segment_temp_less = [t <= self.temp_threshold - LEFT_BOUND for t in self.temp_log_all[-WINDOW_SIZE * LEFT_BOUND:]]
+                last_segment_temp_less = [t < self.temp_threshold - LEFT_BOUND for t in self.temp_log_all[-WINDOW_SIZE * LEFT_BOUND:]]
                 
                 if all(last_segment_temp_less):
                     self._aimd_()
@@ -345,7 +340,7 @@ class Scheduler:
             last_segment_temp = [t > self.temp_threshold for t in self.temp_log_all[-WINDOW_SIZE:]]
             
             # Start AIMD mode if all temps in window are above threshold
-            if all(last_segment_temp):
+            if any(last_segment_temp):
                 self._aimd_()
                 if self.mode == 3:
                     self.thread_flag = 1
@@ -375,7 +370,7 @@ class Scheduler:
         # Multiplicative Decrease
         while (True):
 
-            print ("Temp log all : {}".format(self.temp_log_all[-WINDOW_SIZE * 2:]))            
+            # print ("Temp log all : {}".format(self.temp_log_all[-WINDOW_SIZE * 2:]))            
             last_segment_temp = [t > self.temp_threshold for t in self.temp_log_all[-WINDOW_SIZE * 2:]]
             
             if any(last_segment_temp): 
@@ -391,14 +386,14 @@ class Scheduler:
         # Additive Increase
         while (True):
     
-            print ("AIMD Curr Temp Log : {}".format(self.temp_log_curr))
+            # print ("AIMD Curr Temp Log : {}".format(self.temp_log_curr))
 
             # All temps in window are within [threshold - LEFT_BOUND, threshold] 
-            last_segment_temp = [t <= self.temp_threshold and t >= self.temp_threshold - LEFT_BOUND for t in self.temp_log_all[-WINDOW_SIZE:]]
+            last_segment_temp = [t <= self.temp_threshold and t >= self.temp_threshold - LEFT_BOUND for t in self.max_temp_log[-WINDOW_SIZE:]]
             last_segment_temp_greater = [t > self.temp_threshold for t in self.temp_log_all[-WINDOW_SIZE:]]            
             
-            print ("Last Segment in scope: {}".format(last_segment_temp))
-            print ("Last Segment Greater : {}".format(last_segment_temp_greater))
+            # print ("Last Segment in scope: {}".format(last_segment_temp))
+            # print ("Last Segment Greater : {}".format(last_segment_temp_greater))
 
             # Stop Additive Increase if all temps are in scope
             if all(last_segment_temp):
@@ -415,6 +410,7 @@ class Scheduler:
                 print ("Overkill")
                 self.freq *= M_FACTOR
                 self._modify_freq_()
+                time.sleep(WINDOW_SIZE)
                 continue
             
             # Additive increase when no temps are in the scope
@@ -427,18 +423,16 @@ class Scheduler:
 
 
     def _modify_freq_(self):
-        
-        print ("Modifying freq : {}".format(self.freq))
-        proc = Popen(['./cpu_scaling', '-u', str(self.freq) + 'GHz'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = proc.communicate()
-        # print (stdout.decode("utf-8"))
+        if self.freq >= 0.8 and self.freq <= 3.5:
+            print ("Modifying freq : {}".format(self.freq))
+            proc = Popen(['./cpu_scaling', '-u', str(self.freq) + 'GHz'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+            stdout, stderr = proc.communicate()
 
 
     # Linear regression on the dfvs frequency by temperature threshold
     # a + b * [log(temp_target) - log(temp_start)] = Freq
     # Returns a regression model for extrapolation
     def _log_regress_(self, X1, Y1, X2=None, Y2=None):
-        # print ("Regression started")
         # Reshape from [X, ] to [X, 1]
         
         if isinstance(X1, pd.core.series.Series):
@@ -454,20 +448,20 @@ class Scheduler:
         regr = linear_model.LinearRegression()
         regr.fit(X1, Y1)
 
-        print('Intercept: {}\n'.format(regr.intercept_))
-        print('Coefficients: {}\n'.format(regr.coef_))
+        # print('Intercept: {}\n'.format(regr.intercept_))
+        # print('Coefficients: {}\n'.format(regr.coef_))
 
         # Plot the data :
         Y1_plot = regr.predict(X1)
         Accuracy1 = r2_score(Y1, Y1_plot)
-        print ("RMSE Y1 : {}".format(math.sqrt(mean_squared_error(Y1, Y1_plot))))
-        print ("Y1 Accuracy: {}".format(Accuracy1))
+        # print ("RMSE Y1 : {}".format(math.sqrt(mean_squared_error(Y1, Y1_plot))))
+        # print ("Y1 Accuracy: {}".format(Accuracy1))
         if (X2 is not None and Y2 is not None):
             Y2_plot = regr.predict(X2)
             Accuracy2 = r2_score(Y2, Y2_plot)
-            print ("RMSE Y2 : {}".format(math.sqrt(mean_squared_error(Y2, Y2_plot))))
-            print ("Y2 Accuracy: {}".format(Accuracy2))
-        print ("========================")
+            # print ("RMSE Y2 : {}".format(math.sqrt(mean_squared_error(Y2, Y2_plot))))
+            # print ("Y2 Accuracy: {}".format(Accuracy2))
+        # print ("========================")
 
         return regr
 
@@ -479,12 +473,10 @@ class Scheduler:
         proc_log_temp_rt = Thread(target=self._log_temp_realtime_)
         proc_log_temp_rt.daemon = True
         proc_log_temp_rt.start()
-        # print ("Start logging real time temperature")
 
         proc_log_temp_f = Process(target=self._log_temp_file_)
         proc_log_temp_f.daemon = True
         proc_log_temp_f.start()
-        # print ("Start logging temperature in file")
 
         # Delay extrapolate for 1 second to log temp_start
         time.sleep(1)
@@ -504,11 +496,10 @@ class Scheduler:
         # Hybrid mode
         else:
             thread_annealing = Thread(target=self._extrapolate_realtime_)
-            self.threads["annealing"] = thread_annealing
-            
+            thread_annealing.daemon = True
             thread_AIMD = Thread(target=self._aimd_realtime_)
-            self.threads["aimd"] = thread_AIMD
-            
+            thread_AIMD.daemon = True
+
             thread_annealing.start()
             thread_AIMD.start()
 
