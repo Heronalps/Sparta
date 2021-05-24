@@ -1,11 +1,14 @@
 .DS_store
 /venv/**
+**/log/**
+**/WTB_Images/**
 **/.ipynb_checkpoints
 **/.vscode/**
 /temp_data/**
 /data/**
 **/image_buffer/**
 **/matrix_mul/**
+**/__pycache__/
 *.zip
 *.PNG
 *.JPG
