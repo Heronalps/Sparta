@@ -6,5 +6,5 @@ gpuinfo
 pymysql 
 requests
 scikit-learn==0.21.3
-scipy==1.1.0
+scipy==1.10.0
 numpy==1.18
